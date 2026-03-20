@@ -85,33 +85,28 @@ impl Config {
             )
         })?;
 
-        let client_secret =
-            std::env::var("THREADS_CLIENT_SECRET").map_err(|_| {
-                error::new_validation_error(
-                    0,
-                    "THREADS_CLIENT_SECRET environment variable is required",
-                    "",
-                    "client_secret",
-                )
-            })?;
+        let client_secret = std::env::var("THREADS_CLIENT_SECRET").map_err(|_| {
+            error::new_validation_error(
+                0,
+                "THREADS_CLIENT_SECRET environment variable is required",
+                "",
+                "client_secret",
+            )
+        })?;
 
-        let redirect_uri =
-            std::env::var("THREADS_REDIRECT_URI").map_err(|_| {
-                error::new_validation_error(
-                    0,
-                    "THREADS_REDIRECT_URI environment variable is required",
-                    "",
-                    "redirect_uri",
-                )
-            })?;
+        let redirect_uri = std::env::var("THREADS_REDIRECT_URI").map_err(|_| {
+            error::new_validation_error(
+                0,
+                "THREADS_REDIRECT_URI environment variable is required",
+                "",
+                "redirect_uri",
+            )
+        })?;
 
         let mut config = Self::new(client_id, client_secret, redirect_uri);
 
         if let Ok(scopes) = std::env::var("THREADS_SCOPES") {
-            config.scopes = scopes
-                .split(',')
-                .map(|s| s.trim().to_owned())
-                .collect();
+            config.scopes = scopes.split(',').map(|s| s.trim().to_owned()).collect();
         }
 
         if let Ok(timeout) = std::env::var("THREADS_HTTP_TIMEOUT") {
@@ -189,9 +184,7 @@ impl Config {
                 "redirect_uri",
             ));
         }
-        if !self.redirect_uri.starts_with("http://")
-            && !self.redirect_uri.starts_with("https://")
-        {
+        if !self.redirect_uri.starts_with("http://") && !self.redirect_uri.starts_with("https://") {
             return Err(error::new_validation_error(
                 0,
                 "RedirectURI must be a valid HTTP or HTTPS URL",
@@ -225,9 +218,7 @@ impl Config {
                 "http_timeout",
             ));
         }
-        if !self.base_url.starts_with("http://")
-            && !self.base_url.starts_with("https://")
-        {
+        if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
             return Err(error::new_validation_error(
                 0,
                 "BaseURL must be a valid HTTP or HTTPS URL",
@@ -281,17 +272,19 @@ impl Default for MemoryTokenStorage {
 
 impl TokenStorage for MemoryTokenStorage {
     fn store(&self, token: &TokenInfo) -> crate::Result<()> {
-        let mut guard = self.token.lock().map_err(|_| {
-            error::new_authentication_error(500, "Token storage lock poisoned", "")
-        })?;
+        let mut guard = self
+            .token
+            .lock()
+            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
         *guard = Some(token.clone());
         Ok(())
     }
 
     fn load(&self) -> crate::Result<TokenInfo> {
-        let guard = self.token.lock().map_err(|_| {
-            error::new_authentication_error(500, "Token storage lock poisoned", "")
-        })?;
+        let guard = self
+            .token
+            .lock()
+            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
         guard.clone().ok_or_else(|| {
             error::new_authentication_error(
                 401,
@@ -302,9 +295,10 @@ impl TokenStorage for MemoryTokenStorage {
     }
 
     fn delete(&self) -> crate::Result<()> {
-        let mut guard = self.token.lock().map_err(|_| {
-            error::new_authentication_error(500, "Token storage lock poisoned", "")
-        })?;
+        let mut guard = self
+            .token
+            .lock()
+            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
         *guard = None;
         Ok(())
     }
@@ -345,17 +339,15 @@ impl Client {
             Some(&config.user_agent),
         )?;
 
-        let token_storage: Box<dyn TokenStorage> =
-            Box::new(MemoryTokenStorage::new());
+        let token_storage: Box<dyn TokenStorage> = Box::new(MemoryTokenStorage::new());
 
         // Try to load existing token
-        let (access_token, token_info) =
-            if let Ok(info) = token_storage.load() {
-                let at = info.access_token.clone();
-                (at, Some(info))
-            } else {
-                (String::new(), None)
-            };
+        let (access_token, token_info) = if let Ok(info) = token_storage.load() {
+            let at = info.access_token.clone();
+            (at, Some(info))
+        } else {
+            (String::new(), None)
+        };
 
         Ok(Self {
             config,
@@ -387,13 +379,12 @@ impl Client {
             Some(&config.user_agent),
         )?;
 
-        let (access_token, token_info) =
-            if let Ok(info) = token_storage.load() {
-                let at = info.access_token.clone();
-                (at, Some(info))
-            } else {
-                (String::new(), None)
-            };
+        let (access_token, token_info) = if let Ok(info) = token_storage.load() {
+            let at = info.access_token.clone();
+            (at, Some(info))
+        } else {
+            (String::new(), None)
+        };
 
         Ok(Self {
             config,
@@ -416,10 +407,7 @@ impl Client {
     // ---- Token management ----
 
     /// Set token information (thread-safe).
-    pub async fn set_token_info(
-        &self,
-        token_info: TokenInfo,
-    ) -> crate::Result<()> {
+    pub async fn set_token_info(&self, token_info: TokenInfo) -> crate::Result<()> {
         self.token_storage.store(&token_info)?;
         let mut state = self.token_state.write().await;
         state.access_token = token_info.access_token.clone();
@@ -453,8 +441,7 @@ impl Client {
         match &state.token_info {
             Some(info) => {
                 let threshold = Utc::now()
-                    + chrono::Duration::from_std(within)
-                        .unwrap_or(chrono::Duration::zero());
+                    + chrono::Duration::from_std(within).unwrap_or(chrono::Duration::zero());
                 threshold > info.expires_at
             }
             None => true,
@@ -532,7 +519,11 @@ mod tests {
     use super::*;
 
     fn test_config() -> Config {
-        Config::new("test-client-id", "test-secret", "https://example.com/callback")
+        Config::new(
+            "test-client-id",
+            "test-secret",
+            "https://example.com/callback",
+        )
     }
 
     #[test]
@@ -652,7 +643,11 @@ mod tests {
         };
 
         client.set_token_info(token).await.unwrap();
-        assert!(client.is_token_expiring_soon(Duration::from_secs(3600)).await);
+        assert!(
+            client
+                .is_token_expiring_soon(Duration::from_secs(3600))
+                .await
+        );
         assert!(!client.is_token_expiring_soon(Duration::from_secs(60)).await);
     }
 

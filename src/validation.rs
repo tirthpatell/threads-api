@@ -8,14 +8,11 @@ use crate::constants::{
     MAX_TEXT_ENTITIES, MAX_TEXT_LENGTH, MIN_CAROUSEL_ITEMS, MIN_SEARCH_TIMESTAMP,
 };
 use crate::error::new_validation_error;
-use crate::types::{
-    GifAttachment, PaginationOptions, SearchOptions, TextAttachment, TextEntity,
-};
+use crate::types::{GifAttachment, PaginationOptions, SearchOptions, TextAttachment, TextEntity};
 
 /// Regex matching HTTP(S) URLs.
-static URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"https?://[^\s)<>\]\}]+").unwrap()
-});
+static URL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"https?://[^\s)<>\]\}]+").unwrap());
 
 /// Validate that an optional limit does not exceed `MAX_POSTS_PER_REQUEST`.
 ///
@@ -113,7 +110,10 @@ pub fn validate_text_attachment(attachment: &TextAttachment) -> crate::Result<()
 
 /// Validate text entities: at most `MAX_TEXT_ENTITIES`, each must be SPOILER
 /// type, and offsets must be non-negative (enforced by `usize`).
-pub fn validate_text_entities(entities: &[TextEntity], text_char_count: usize) -> crate::Result<()> {
+pub fn validate_text_entities(
+    entities: &[TextEntity],
+    text_char_count: usize,
+) -> crate::Result<()> {
     if entities.len() > MAX_TEXT_ENTITIES {
         return Err(new_validation_error(
             400,
@@ -215,9 +215,7 @@ pub fn validate_country_codes(codes: &[String]) -> crate::Result<()> {
         if code.len() != 2 {
             return Err(new_validation_error(
                 400,
-                &format!(
-                    "allowlisted_country_codes[{i}] '{code}' must be exactly 2 characters"
-                ),
+                &format!("allowlisted_country_codes[{i}] '{code}' must be exactly 2 characters"),
                 "invalid country code length",
                 "allowlisted_country_codes",
             ));
@@ -242,9 +240,7 @@ pub fn validate_carousel_children(count: usize) -> crate::Result<()> {
     if count < MIN_CAROUSEL_ITEMS {
         return Err(new_validation_error(
             400,
-            &format!(
-                "carousel requires at least {MIN_CAROUSEL_ITEMS} items, got {count}"
-            ),
+            &format!("carousel requires at least {MIN_CAROUSEL_ITEMS} items, got {count}"),
             "too few carousel items",
             "children",
         ));
@@ -252,9 +248,7 @@ pub fn validate_carousel_children(count: usize) -> crate::Result<()> {
     if count > MAX_CAROUSEL_ITEMS {
         return Err(new_validation_error(
             400,
-            &format!(
-                "carousel allows at most {MAX_CAROUSEL_ITEMS} items, got {count}"
-            ),
+            &format!("carousel allows at most {MAX_CAROUSEL_ITEMS} items, got {count}"),
             "too many carousel items",
             "children",
         ));
@@ -268,9 +262,7 @@ pub fn validate_pagination_options(opts: &PaginationOptions) -> crate::Result<()
         if limit > MAX_POSTS_PER_REQUEST {
             return Err(new_validation_error(
                 400,
-                &format!(
-                    "limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"
-                ),
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
                 "limit too large",
                 "limit",
             ));
@@ -285,9 +277,7 @@ pub fn validate_search_options(opts: &SearchOptions) -> crate::Result<()> {
         if limit > MAX_POSTS_PER_REQUEST {
             return Err(new_validation_error(
                 400,
-                &format!(
-                    "limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"
-                ),
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
                 "limit too large",
                 "limit",
             ));

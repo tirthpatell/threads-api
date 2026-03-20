@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
-use crate::types::search::SearchOptions;
 use crate::types::PostsResponse;
+use crate::types::search::SearchOptions;
 use crate::validation;
 
 impl Client {

@@ -161,10 +161,7 @@ impl Client {
     }
 
     /// Create a carousel post.
-    pub async fn create_carousel_post(
-        &self,
-        content: &CarouselPostContent,
-    ) -> crate::Result<Post> {
+    pub async fn create_carousel_post(&self, content: &CarouselPostContent) -> crate::Result<Post> {
         let token = self.access_token().await;
         if token.is_empty() {
             return Err(error::new_authentication_error(
@@ -270,10 +267,7 @@ impl Client {
     // ---- Private helpers ----
 
     /// Create a media container and return its ID.
-    async fn create_container(
-        &self,
-        params: HashMap<String, String>,
-    ) -> crate::Result<String> {
+    async fn create_container(&self, params: HashMap<String, String>) -> crate::Result<String> {
         let token = self.access_token().await;
         let user_id = self.user_id().await;
         let path = format!("/{}/threads", user_id);
@@ -304,10 +298,7 @@ impl Client {
     }
 
     /// Poll container status until it is FINISHED/PUBLISHED, ERROR, or EXPIRED.
-    async fn wait_for_container_ready(
-        &self,
-        container_id: &ContainerId,
-    ) -> crate::Result<()> {
+    async fn wait_for_container_ready(&self, container_id: &ContainerId) -> crate::Result<()> {
         for attempt in 0..constants::DEFAULT_CONTAINER_POLL_MAX_ATTEMPTS {
             let status = self.get_container_status(container_id).await?;
 
@@ -366,7 +357,10 @@ impl Client {
         if let Some(ref rc) = content.reply_control {
             params.insert(
                 "reply_control".into(),
-                serde_json::to_string(rc).unwrap_or_default().trim_matches('"').to_owned(),
+                serde_json::to_string(rc)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_owned(),
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
@@ -377,10 +371,7 @@ impl Client {
         }
         if let Some(ref codes) = content.allowlisted_country_codes {
             if !codes.is_empty() {
-                params.insert(
-                    "allowlisted_country_codes".into(),
-                    codes.join(","),
-                );
+                params.insert("allowlisted_country_codes".into(), codes.join(","));
             }
         }
         if let Some(ref loc) = content.location_id {
@@ -432,7 +423,10 @@ impl Client {
         if let Some(ref rc) = content.reply_control {
             params.insert(
                 "reply_control".into(),
-                serde_json::to_string(rc).unwrap_or_default().trim_matches('"').to_owned(),
+                serde_json::to_string(rc)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_owned(),
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
@@ -443,10 +437,7 @@ impl Client {
         }
         if let Some(ref codes) = content.allowlisted_country_codes {
             if !codes.is_empty() {
-                params.insert(
-                    "allowlisted_country_codes".into(),
-                    codes.join(","),
-                );
+                params.insert("allowlisted_country_codes".into(), codes.join(","));
             }
         }
         if let Some(ref loc) = content.location_id {
@@ -488,7 +479,10 @@ impl Client {
         if let Some(ref rc) = content.reply_control {
             params.insert(
                 "reply_control".into(),
-                serde_json::to_string(rc).unwrap_or_default().trim_matches('"').to_owned(),
+                serde_json::to_string(rc)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_owned(),
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
@@ -499,10 +493,7 @@ impl Client {
         }
         if let Some(ref codes) = content.allowlisted_country_codes {
             if !codes.is_empty() {
-                params.insert(
-                    "allowlisted_country_codes".into(),
-                    codes.join(","),
-                );
+                params.insert("allowlisted_country_codes".into(), codes.join(","));
             }
         }
         if let Some(ref loc) = content.location_id {
@@ -542,7 +533,10 @@ impl Client {
         if let Some(ref rc) = content.reply_control {
             params.insert(
                 "reply_control".into(),
-                serde_json::to_string(rc).unwrap_or_default().trim_matches('"').to_owned(),
+                serde_json::to_string(rc)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_owned(),
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
@@ -553,10 +547,7 @@ impl Client {
         }
         if let Some(ref codes) = content.allowlisted_country_codes {
             if !codes.is_empty() {
-                params.insert(
-                    "allowlisted_country_codes".into(),
-                    codes.join(","),
-                );
+                params.insert("allowlisted_country_codes".into(), codes.join(","));
             }
         }
         if let Some(ref loc) = content.location_id {

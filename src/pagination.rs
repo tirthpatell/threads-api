@@ -31,11 +31,7 @@ pub struct PostIterator<'a> {
 
 impl<'a> PostIterator<'a> {
     /// Create a new post iterator.
-    pub fn new(
-        client: &'a Client,
-        user_id: UserId,
-        options: Option<PostsOptions>,
-    ) -> Self {
+    pub fn new(client: &'a Client, user_id: UserId, options: Option<PostsOptions>) -> Self {
         Self {
             client,
             user_id,
@@ -112,11 +108,7 @@ pub struct ReplyIterator<'a> {
 }
 
 impl<'a> ReplyIterator<'a> {
-    pub fn new(
-        client: &'a Client,
-        post_id: PostId,
-        options: Option<RepliesOptions>,
-    ) -> Self {
+    pub fn new(client: &'a Client, post_id: PostId, options: Option<RepliesOptions>) -> Self {
         Self {
             client,
             post_id,
@@ -136,10 +128,7 @@ impl<'a> ReplyIterator<'a> {
             opts.after = Some(c.clone());
         }
 
-        let resp = self
-            .client
-            .get_replies(&self.post_id, Some(&opts))
-            .await?;
+        let resp = self.client.get_replies(&self.post_id, Some(&opts)).await?;
 
         if let Some(c) = next_cursor(&resp.paging) {
             self.cursor = Some(c);
@@ -213,10 +202,7 @@ impl<'a> SearchIterator<'a> {
             opts.after = Some(c.clone());
         }
 
-        let resp = self
-            .client
-            .keyword_search(&self.query, Some(&opts))
-            .await?;
+        let resp = self.client.keyword_search(&self.query, Some(&opts)).await?;
 
         if let Some(c) = next_cursor(&resp.paging) {
             self.cursor = Some(c);

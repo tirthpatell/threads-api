@@ -106,11 +106,7 @@ impl Client {
 
         let resp = self
             .http_client
-            .post(
-                "/oauth/access_token",
-                Some(RequestBody::Form(form)),
-                "",
-            )
+            .post("/oauth/access_token", Some(RequestBody::Form(form)), "")
             .await?;
 
         let token_resp: TokenResponse = resp.json()?;
@@ -213,10 +209,7 @@ impl Client {
     }
 
     /// Inspect a token via the `/debug_token` endpoint.
-    pub async fn debug_token(
-        &self,
-        input_token: &str,
-    ) -> crate::Result<DebugTokenResponse> {
+    pub async fn debug_token(&self, input_token: &str) -> crate::Result<DebugTokenResponse> {
         let token = self.access_token().await;
         if token.is_empty() {
             return Err(crate::error::new_authentication_error(
@@ -229,10 +222,7 @@ impl Client {
         let mut params = HashMap::new();
         params.insert("input_token".into(), input_token.to_owned());
 
-        let resp = self
-            .http_client
-            .get("/debug_token", params, &token)
-            .await?;
+        let resp = self.http_client.get("/debug_token", params, &token).await?;
 
         resp.json()
     }
@@ -248,11 +238,11 @@ impl Client {
     ) -> crate::Result<()> {
         let data = &debug_resp.data;
 
-        let expires_at = DateTime::<Utc>::from_timestamp(data.expires_at, 0)
-            .unwrap_or_else(Utc::now);
+        let expires_at =
+            DateTime::<Utc>::from_timestamp(data.expires_at, 0).unwrap_or_else(Utc::now);
 
-        let created_at = DateTime::<Utc>::from_timestamp(data.issued_at, 0)
-            .unwrap_or_else(Utc::now);
+        let created_at =
+            DateTime::<Utc>::from_timestamp(data.issued_at, 0).unwrap_or_else(Utc::now);
 
         let token_info = TokenInfo {
             access_token: access_token.to_owned(),
@@ -276,7 +266,11 @@ mod tests {
     use crate::client::Config;
 
     fn test_config() -> Config {
-        Config::new("test-client-id", "test-secret", "https://example.com/callback")
+        Config::new(
+            "test-client-id",
+            "test-secret",
+            "https://example.com/callback",
+        )
     }
 
     #[test]
@@ -308,7 +302,10 @@ mod tests {
         assert!(url.contains("response_type=code"));
         assert!(url.contains("state="));
         assert!(url.contains("scope="));
-        assert!(!state.is_empty(), "state must be returned for CSRF verification");
+        assert!(
+            !state.is_empty(),
+            "state must be returned for CSRF verification"
+        );
         assert!(url.contains(&format!("state={state}")));
     }
 

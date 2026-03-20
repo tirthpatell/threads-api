@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, USER_AGENT};
 use serde::de::DeserializeOwned;
 
 use crate::constants::{BASE_API_URL, VERSION};
@@ -154,9 +154,8 @@ impl HttpClient {
 
             if attempt > 0 {
                 tokio::time::sleep(delay).await;
-                delay = Duration::from_secs_f64(
-                    delay.as_secs_f64() * self.retry_config.backoff_factor,
-                );
+                delay =
+                    Duration::from_secs_f64(delay.as_secs_f64() * self.retry_config.backoff_factor);
                 if delay > self.retry_config.max_delay {
                     delay = self.retry_config.max_delay;
                 }
@@ -164,9 +163,7 @@ impl HttpClient {
 
             match self.execute_request(opts, access_token).await {
                 Ok(resp) => {
-                    if let (Some(rl), Some(info)) =
-                        (&self.rate_limiter, &resp.rate_limit)
-                    {
+                    if let (Some(rl), Some(info)) = (&self.rate_limiter, &resp.rate_limit) {
                         rl.update_from_headers(info).await;
                     }
                     return Ok(resp);
@@ -254,12 +251,7 @@ impl HttpClient {
             .bytes()
             .await
             .map_err(|e| {
-                error::new_network_error(
-                    0,
-                    "Failed to read response body",
-                    &e.to_string(),
-                    false,
-                )
+                error::new_network_error(0, "Failed to read response body", &e.to_string(), false)
             })?
             .to_vec();
 
@@ -326,11 +318,7 @@ impl HttpClient {
     }
 
     /// Convenience: DELETE request.
-    pub async fn delete(
-        &self,
-        path: &str,
-        access_token: &str,
-    ) -> crate::Result<Response> {
+    pub async fn delete(&self, path: &str, access_token: &str) -> crate::Result<Response> {
         self.do_request(
             &RequestOptions {
                 method: reqwest::Method::DELETE,
@@ -369,7 +357,11 @@ impl HttpClient {
             .map(Duration::from_secs);
 
         // Only return info if at least one rate limit header was present
-        if limit_header.is_none() && remaining_header.is_none() && reset_header.is_none() && retry_after.is_none() {
+        if limit_header.is_none()
+            && remaining_header.is_none()
+            && reset_header.is_none()
+            && retry_after.is_none()
+        {
             return None;
         }
 
@@ -407,9 +399,7 @@ impl HttpClient {
         let mut error_subcode: u16 = 0;
 
         if !resp.body.is_empty() {
-            if let Ok(api_err) =
-                serde_json::from_slice::<ApiErrorResponse>(&resp.body)
-            {
+            if let Ok(api_err) = serde_json::from_slice::<ApiErrorResponse>(&resp.body) {
                 if !api_err.error.message.is_empty() {
                     message = api_err.error.message;
                     is_transient = api_err.error.is_transient;
@@ -435,9 +425,7 @@ impl HttpClient {
         };
 
         let mut err = match resp.status_code {
-            401 | 403 => {
-                error::new_authentication_error(error_code, &message, &details)
-            }
+            401 | 403 => error::new_authentication_error(error_code, &message, &details),
             429 => {
                 let retry_after = resp
                     .rate_limit
@@ -459,30 +447,13 @@ impl HttpClient {
                     rl.mark_rate_limited(reset_time).await;
                 }
 
-                error::new_rate_limit_error(
-                    error_code,
-                    &message,
-                    &details,
-                    retry_after,
-                )
+                error::new_rate_limit_error(error_code, &message, &details, retry_after)
             }
-            400 | 422 => {
-                error::new_validation_error(error_code, &message, &details, "")
-            }
-            _ => error::new_api_error(
-                error_code,
-                &message,
-                &details,
-                &resp.request_id,
-            ),
+            400 | 422 => error::new_validation_error(error_code, &message, &details, ""),
+            _ => error::new_api_error(error_code, &message, &details, &resp.request_id),
         };
 
-        error::set_error_metadata(
-            &mut err,
-            is_transient,
-            resp.status_code,
-            error_subcode,
-        );
+        error::set_error_metadata(&mut err, is_transient, resp.status_code, error_subcode);
 
         err
     }
@@ -521,13 +492,7 @@ impl HttpClient {
                 Some(err),
             );
         }
-        error::new_network_error_with_cause(
-            0,
-            "Network error",
-            &err.to_string(),
-            false,
-            Some(err),
-        )
+        error::new_network_error_with_cause(0, "Network error", &err.to_string(), false, Some(err))
     }
 }
 
