@@ -238,6 +238,14 @@ impl Client {
     ) -> crate::Result<()> {
         let data = &debug_resp.data;
 
+        if !data.is_valid {
+            return Err(error::new_authentication_error(
+                401,
+                "Cannot set token from invalid debug info: token is not valid",
+                "",
+            ));
+        }
+
         let expires_at =
             DateTime::<Utc>::from_timestamp(data.expires_at, 0).unwrap_or_else(Utc::now);
 

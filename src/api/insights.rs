@@ -25,7 +25,7 @@ impl Client {
         let mut params = HashMap::new();
 
         let metric_str = if metrics.is_empty() {
-            "views,likes,replies,reposts".to_owned()
+            "views,likes,replies,reposts,quotes".to_owned()
         } else {
             metrics.join(",")
         };
@@ -56,7 +56,7 @@ impl Client {
         let mut params = HashMap::new();
 
         let metric_str = if metrics.is_empty() {
-            "views,likes,replies,reposts".to_owned()
+            "views,reach,replies,reposts,quotes,followers_count".to_owned()
         } else {
             metrics.join(",")
         };
