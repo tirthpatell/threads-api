@@ -214,12 +214,21 @@ impl Client {
         &self,
         input_token: &str,
     ) -> crate::Result<DebugTokenResponse> {
+        let token = self.access_token().await;
+        if token.is_empty() {
+            return Err(crate::error::new_authentication_error(
+                401,
+                "Access token is required to call debug_token",
+                "",
+            ));
+        }
+
         let mut params = HashMap::new();
         params.insert("input_token".into(), input_token.to_owned());
 
         let resp = self
             .http_client
-            .get("/debug_token", params, input_token)
+            .get("/debug_token", params, &token)
             .await?;
 
         resp.json()

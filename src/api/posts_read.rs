@@ -4,6 +4,7 @@ use crate::client::Client;
 use crate::constants;
 use crate::error;
 use crate::types::{PaginationOptions, Post, PostId, PostsOptions, PostsResponse, UserId};
+use crate::validation;
 
 impl Client {
     /// Get a single post by ID with extended fields.
@@ -39,6 +40,10 @@ impl Client {
                 "",
                 "user_id",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
         }
 
         let token = self.access_token().await;
@@ -83,6 +88,10 @@ impl Client {
             ));
         }
 
+        if let Some(opts) = opts {
+            validation::validate_pagination_options(opts)?;
+        }
+
         let token = self.access_token().await;
         let mut params = HashMap::new();
         params.insert("fields".into(), constants::POST_EXTENDED_FIELDS.into());
@@ -117,6 +126,10 @@ impl Client {
                 "",
                 "user_id",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_pagination_options(opts)?;
         }
 
         let token = self.access_token().await;

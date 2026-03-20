@@ -5,6 +5,7 @@ use crate::constants;
 use crate::error;
 use crate::http::RequestBody;
 use crate::types::{PendingRepliesOptions, PostId, RepliesOptions, RepliesResponse};
+use crate::validation;
 
 impl Client {
     /// Get replies to a post.
@@ -20,6 +21,10 @@ impl Client {
                 "",
                 "post_id",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
         }
 
         let token = self.access_token().await;
@@ -61,6 +66,10 @@ impl Client {
             ));
         }
 
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
+        }
+
         let token = self.access_token().await;
         let mut params = HashMap::new();
         params.insert("fields".into(), constants::REPLY_FIELDS.into());
@@ -98,6 +107,10 @@ impl Client {
                 "",
                 "post_id",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
         }
 
         let token = self.access_token().await;

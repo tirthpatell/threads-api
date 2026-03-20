@@ -17,6 +17,23 @@ static URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"https?://[^\s)<>\]\}]+").unwrap()
 });
 
+/// Validate that an optional limit does not exceed `MAX_POSTS_PER_REQUEST`.
+///
+/// Works with any options type — just pass `opts.limit` directly.
+pub fn validate_limit(limit: Option<usize>) -> crate::Result<()> {
+    if let Some(limit) = limit {
+        if limit > MAX_POSTS_PER_REQUEST {
+            return Err(new_validation_error(
+                400,
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
+                "limit too large",
+                "limit",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Validate that `text` does not exceed `MAX_TEXT_LENGTH` unicode characters.
 pub fn validate_text_length(text: &str, field_name: &str) -> crate::Result<()> {
     let count = text.chars().count();

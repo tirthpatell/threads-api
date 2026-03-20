@@ -5,6 +5,7 @@ use crate::constants;
 use crate::error;
 use crate::types::search::SearchOptions;
 use crate::types::PostsResponse;
+use crate::validation;
 
 impl Client {
     /// Search for posts by keyword.
@@ -20,6 +21,10 @@ impl Client {
                 "",
                 "query",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_search_options(opts)?;
         }
 
         let token = self.access_token().await;

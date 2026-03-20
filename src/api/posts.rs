@@ -8,6 +8,7 @@ use crate::types::{
     CarouselPostContent, ContainerId, ContainerStatus, ImagePostContent, Post, PostId,
     TextPostContent, VideoPostContent,
 };
+use crate::validation;
 
 impl Client {
     /// Create a text post. If `auto_publish_text` is true, skips the
@@ -38,6 +39,27 @@ impl Client {
                 "",
                 "text",
             ));
+        }
+
+        validation::validate_text_length(&content.text, "text")?;
+        validation::validate_link_count(
+            &content.text,
+            content.link_attachment.as_deref().unwrap_or(""),
+        )?;
+        if let Some(ref entities) = content.text_entities {
+            validation::validate_text_entities(entities)?;
+        }
+        if let Some(ref attachment) = content.text_attachment {
+            validation::validate_text_attachment(attachment)?;
+        }
+        if let Some(ref gif) = content.gif_attachment {
+            validation::validate_gif_attachment(gif)?;
+        }
+        if let Some(ref tag) = content.topic_tag {
+            validation::validate_topic_tag(tag)?;
+        }
+        if let Some(ref codes) = content.allowlisted_country_codes {
+            validation::validate_country_codes(codes)?;
         }
 
         if content.auto_publish_text {
@@ -74,13 +96,18 @@ impl Client {
             ));
         }
 
-        if content.image_url.is_empty() {
-            return Err(error::new_validation_error(
-                0,
-                "Image URL is required for image posts",
-                "",
-                "image_url",
-            ));
+        validation::validate_media_url(&content.image_url, "image")?;
+        if let Some(ref text) = content.text {
+            validation::validate_text_length(text, "text")?;
+        }
+        if let Some(ref entities) = content.text_entities {
+            validation::validate_text_entities(entities)?;
+        }
+        if let Some(ref tag) = content.topic_tag {
+            validation::validate_topic_tag(tag)?;
+        }
+        if let Some(ref codes) = content.allowlisted_country_codes {
+            validation::validate_country_codes(codes)?;
         }
 
         let params = self.build_image_params(content, &user_id);
@@ -110,13 +137,18 @@ impl Client {
             ));
         }
 
-        if content.video_url.is_empty() {
-            return Err(error::new_validation_error(
-                0,
-                "Video URL is required for video posts",
-                "",
-                "video_url",
-            ));
+        validation::validate_media_url(&content.video_url, "video")?;
+        if let Some(ref text) = content.text {
+            validation::validate_text_length(text, "text")?;
+        }
+        if let Some(ref entities) = content.text_entities {
+            validation::validate_text_entities(entities)?;
+        }
+        if let Some(ref tag) = content.topic_tag {
+            validation::validate_topic_tag(tag)?;
+        }
+        if let Some(ref codes) = content.allowlisted_country_codes {
+            validation::validate_country_codes(codes)?;
         }
 
         let params = self.build_video_params(content, &user_id);
@@ -149,13 +181,18 @@ impl Client {
             ));
         }
 
-        if content.children.is_empty() {
-            return Err(error::new_validation_error(
-                0,
-                "Children container IDs are required for carousel posts",
-                "",
-                "children",
-            ));
+        validation::validate_carousel_children(content.children.len())?;
+        if let Some(ref text) = content.text {
+            validation::validate_text_length(text, "text")?;
+        }
+        if let Some(ref entities) = content.text_entities {
+            validation::validate_text_entities(entities)?;
+        }
+        if let Some(ref tag) = content.topic_tag {
+            validation::validate_topic_tag(tag)?;
+        }
+        if let Some(ref codes) = content.allowlisted_country_codes {
+            validation::validate_country_codes(codes)?;
         }
 
         let params = self.build_carousel_params(content, &user_id);

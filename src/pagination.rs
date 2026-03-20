@@ -69,6 +69,7 @@ impl<'a> PostIterator<'a> {
 
         if resp.data.is_empty() {
             self.done = true;
+            return Ok(None);
         }
 
         Ok(Some(resp))
@@ -148,6 +149,7 @@ impl<'a> ReplyIterator<'a> {
 
         if resp.data.is_empty() {
             self.done = true;
+            return Ok(None);
         }
 
         Ok(Some(resp))
@@ -224,6 +226,7 @@ impl<'a> SearchIterator<'a> {
 
         if resp.data.is_empty() {
             self.done = true;
+            return Ok(None);
         }
 
         Ok(Some(resp))

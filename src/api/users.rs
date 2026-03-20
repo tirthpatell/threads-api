@@ -4,6 +4,7 @@ use crate::client::Client;
 use crate::constants;
 use crate::error;
 use crate::types::{PostsOptions, PublicUser, RepliesResponse, User, UserId};
+use crate::validation;
 
 impl Client {
     /// Get a user profile by ID.
@@ -75,6 +76,10 @@ impl Client {
                 "",
                 "user_id",
             ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
         }
 
         let token = self.access_token().await;
