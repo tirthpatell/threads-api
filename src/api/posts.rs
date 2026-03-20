@@ -326,7 +326,7 @@ impl Client {
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
-            params.insert("reply_to_id".into(), reply_to.clone());
+            params.insert("reply_to_id".into(), reply_to.to_string());
         }
         if let Some(ref topic) = content.topic_tag {
             params.insert("topic_tag".into(), topic.clone());
@@ -343,7 +343,7 @@ impl Client {
             params.insert("location_id".into(), loc.clone());
         }
         if let Some(ref qp) = content.quoted_post_id {
-            params.insert("quote_post_id".into(), qp.clone());
+            params.insert("quote_post_id".into(), qp.to_string());
         }
         if content.is_ghost_post {
             params.insert("is_ghost_post".into(), "true".into());
@@ -377,7 +377,7 @@ impl Client {
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
-            params.insert("reply_to_id".into(), reply_to.clone());
+            params.insert("reply_to_id".into(), reply_to.to_string());
         }
         if let Some(ref topic) = content.topic_tag {
             params.insert("topic_tag".into(), topic.clone());
@@ -394,7 +394,7 @@ impl Client {
             params.insert("location_id".into(), loc.clone());
         }
         if let Some(ref qp) = content.quoted_post_id {
-            params.insert("quote_post_id".into(), qp.clone());
+            params.insert("quote_post_id".into(), qp.to_string());
         }
         if content.is_spoiler_media {
             params.insert("is_spoiler_media".into(), "true".into());
@@ -428,7 +428,7 @@ impl Client {
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
-            params.insert("reply_to_id".into(), reply_to.clone());
+            params.insert("reply_to_id".into(), reply_to.to_string());
         }
         if let Some(ref topic) = content.topic_tag {
             params.insert("topic_tag".into(), topic.clone());
@@ -445,7 +445,7 @@ impl Client {
             params.insert("location_id".into(), loc.clone());
         }
         if let Some(ref qp) = content.quoted_post_id {
-            params.insert("quote_post_id".into(), qp.clone());
+            params.insert("quote_post_id".into(), qp.to_string());
         }
         if content.is_spoiler_media {
             params.insert("is_spoiler_media".into(), "true".into());
@@ -464,7 +464,8 @@ impl Client {
     ) -> HashMap<String, String> {
         let mut params = HashMap::new();
         params.insert("media_type".into(), constants::MEDIA_TYPE_CAROUSEL.into());
-        params.insert("children".into(), content.children.join(","));
+        let children_str: Vec<String> = content.children.iter().map(|c| c.to_string()).collect();
+        params.insert("children".into(), children_str.join(","));
 
         if let Some(ref text) = content.text {
             params.insert("text".into(), text.clone());
@@ -476,7 +477,7 @@ impl Client {
             );
         }
         if let Some(ref reply_to) = content.reply_to_id {
-            params.insert("reply_to_id".into(), reply_to.clone());
+            params.insert("reply_to_id".into(), reply_to.to_string());
         }
         if let Some(ref topic) = content.topic_tag {
             params.insert("topic_tag".into(), topic.clone());
@@ -493,7 +494,7 @@ impl Client {
             params.insert("location_id".into(), loc.clone());
         }
         if let Some(ref qp) = content.quoted_post_id {
-            params.insert("quote_post_id".into(), qp.clone());
+            params.insert("quote_post_id".into(), qp.to_string());
         }
         if content.is_spoiler_media {
             params.insert("is_spoiler_media".into(), "true".into());
