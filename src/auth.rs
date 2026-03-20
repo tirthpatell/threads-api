@@ -65,7 +65,9 @@ impl Client {
     ///
     /// `scopes` overrides the scopes from the client config. Pass an empty
     /// slice to use the config defaults.
-    pub fn get_auth_url(&self, scopes: &[String]) -> String {
+    /// Returns `(url, state)` — the caller must store `state` and verify it
+    /// matches the `state` query parameter on the OAuth callback to prevent CSRF.
+    pub fn get_auth_url(&self, scopes: &[String]) -> (String, String) {
         let cfg = self.config();
         let effective_scopes = if scopes.is_empty() {
             &cfg.scopes
@@ -86,7 +88,7 @@ impl Client {
             .append_pair("response_type", "code")
             .append_pair("state", &state);
 
-        url.into()
+        (url.into(), state)
     }
 
     /// Exchange an authorization code for a short-lived access token.
@@ -286,7 +288,7 @@ mod tests {
     #[test]
     fn test_get_auth_url_contains_required_params() {
         let client = Client::new(test_config()).unwrap();
-        let url = client.get_auth_url(&[]);
+        let (url, state) = client.get_auth_url(&[]);
 
         assert!(url.starts_with("https://www.threads.net/oauth/authorize?"));
         assert!(url.contains("client_id=test-client-id"));
@@ -294,13 +296,15 @@ mod tests {
         assert!(url.contains("response_type=code"));
         assert!(url.contains("state="));
         assert!(url.contains("scope="));
+        assert!(!state.is_empty(), "state must be returned for CSRF verification");
+        assert!(url.contains(&format!("state={state}")));
     }
 
     #[test]
     fn test_get_auth_url_uses_custom_scopes() {
         let client = Client::new(test_config()).unwrap();
         let scopes = vec!["threads_basic".into(), "threads_manage_replies".into()];
-        let url = client.get_auth_url(&scopes);
+        let (url, _state) = client.get_auth_url(&scopes);
 
         // comma-joined in the scope param
         assert!(url.contains("scope=threads_basic%2Cthreads_manage_replies"));
@@ -309,7 +313,7 @@ mod tests {
     #[test]
     fn test_get_auth_url_uses_config_scopes_when_empty() {
         let client = Client::new(test_config()).unwrap();
-        let url = client.get_auth_url(&[]);
+        let (url, _state) = client.get_auth_url(&[]);
 
         // Config default includes threads_basic
         assert!(url.contains("threads_basic"));

@@ -67,7 +67,12 @@ impl Response {
                 "Invalid JSON response",
                 &format!(
                     "Received non-JSON response: {}",
-                    &trimmed[..trimmed.len().min(200)]
+                    &trimmed[..trimmed
+                        .char_indices()
+                        .map(|(i, _)| i)
+                        .take_while(|&i| i <= 200)
+                        .last()
+                        .unwrap_or(0)]
                 ),
                 &self.request_id,
             ));

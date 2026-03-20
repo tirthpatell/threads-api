@@ -216,7 +216,7 @@ impl RateLimiter {
         if inner.limit == 0 {
             return false;
         }
-        let used = (inner.limit - inner.remaining) as f64 / inner.limit as f64;
+        let used = inner.limit.saturating_sub(inner.remaining) as f64 / inner.limit as f64;
         used >= threshold
     }
 
