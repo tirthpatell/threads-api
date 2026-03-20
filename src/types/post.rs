@@ -213,6 +213,7 @@ pub struct CarouselPostContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostsResponse {
     pub data: Vec<Post>,
+    #[serde(default)]
     pub paging: Paging,
 }
 
@@ -220,6 +221,7 @@ pub struct PostsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepliesResponse {
     pub data: Vec<Post>,
+    #[serde(default)]
     pub paging: Paging,
 }
 

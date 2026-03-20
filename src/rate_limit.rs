@@ -49,6 +49,7 @@ struct Inner {
     rate_limited: bool,
     last_rate_limit_time: Option<Instant>,
     consecutive_rate_limits: u32,
+    enabled: bool,
 }
 
 /// Manages API rate limiting with intelligent backoff.
@@ -88,15 +89,29 @@ impl RateLimiter {
                 rate_limited: false,
                 last_rate_limit_time: None,
                 consecutive_rate_limits: 0,
+                enabled: true,
             }),
         }
     }
 
+    /// Disable rate limiting. Requests will not be throttled.
+    pub async fn disable(&self) {
+        let mut inner = self.inner.write().await;
+        inner.enabled = false;
+    }
+
+    /// Enable rate limiting.
+    pub async fn enable(&self) {
+        let mut inner = self.inner.write().await;
+        inner.enabled = true;
+    }
+
     /// Returns `true` if a request should wait before proceeding.
-    /// Only returns `true` when the API has explicitly rate-limited us.
+    /// Only returns `true` when the API has explicitly rate-limited us
+    /// and the rate limiter is enabled.
     pub async fn should_wait(&self) -> bool {
         let inner = self.inner.read().await;
-        inner.rate_limited && Utc::now() < inner.reset_time
+        inner.enabled && inner.rate_limited && Utc::now() < inner.reset_time
     }
 
     /// Blocks until it's safe to make a request.
@@ -324,5 +339,21 @@ mod tests {
         let rl = RateLimiter::new(&RateLimiterConfig::default());
         // Should return immediately when not rate-limited
         rl.wait().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_disable_enable() {
+        let rl = RateLimiter::new(&RateLimiterConfig::default());
+        let reset = Utc::now() + chrono::Duration::minutes(5);
+        rl.mark_rate_limited(reset).await;
+        assert!(rl.should_wait().await);
+
+        // Disable bypasses rate limiting
+        rl.disable().await;
+        assert!(!rl.should_wait().await);
+
+        // Re-enable restores rate limiting
+        rl.enable().await;
+        assert!(rl.should_wait().await);
     }
 }

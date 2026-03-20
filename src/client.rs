@@ -334,7 +334,7 @@ pub struct Client {
     config: Config,
     pub(crate) http_client: HttpClient,
     rate_limiter: Option<Arc<RateLimiter>>,
-    token_storage: Box<dyn TokenStorage>,
+    pub(crate) token_storage: Box<dyn TokenStorage>,
     token_state: RwLock<TokenState>,
 }
 
@@ -413,6 +413,56 @@ impl Client {
         })
     }
 
+    /// Create a client with a pre-existing access token.
+    ///
+    /// Calls the debug_token endpoint to resolve the user ID and exact
+    /// expiry from the token. Useful for scripts and tests where the
+    /// token is already known.
+    pub async fn with_token(mut config: Config, access_token: &str) -> crate::Result<Self> {
+        config.set_defaults();
+        config.validate()?;
+
+        let rate_limiter = Arc::new(RateLimiter::new(&RateLimiterConfig::default()));
+
+        let http_client = HttpClient::new(
+            config.http_timeout,
+            config.retry_config.clone(),
+            Some(Arc::clone(&rate_limiter)),
+            Some(&config.base_url),
+            Some(&config.user_agent),
+        )?;
+
+        let token_storage: Box<dyn TokenStorage> = Box::new(MemoryTokenStorage::new());
+
+        // Set a temporary token so we can call debug_token
+        let temp_info = TokenInfo {
+            access_token: access_token.to_owned(),
+            token_type: "bearer".into(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            user_id: String::new(),
+            created_at: Utc::now(),
+        };
+
+        let client = Self {
+            config,
+            http_client,
+            rate_limiter: Some(rate_limiter),
+            token_storage,
+            token_state: RwLock::new(TokenState {
+                access_token: access_token.to_owned(),
+                token_info: Some(temp_info),
+            }),
+        };
+
+        // Validate and resolve accurate token info via debug_token
+        let debug_resp = client.debug_token(access_token).await?;
+        client
+            .set_token_from_debug_info(access_token, &debug_resp)
+            .await?;
+
+        Ok(client)
+    }
+
     /// Create a client from environment variables.
     pub async fn from_env() -> crate::Result<Self> {
         let config = Config::from_env()?;
@@ -472,8 +522,8 @@ impl Client {
         Ok(())
     }
 
-    /// Get the current access token (for internal use by API methods).
-    pub(crate) async fn access_token(&self) -> String {
+    /// Get the current access token.
+    pub async fn access_token(&self) -> String {
         self.token_state.read().await.access_token.clone()
     }
 
@@ -490,9 +540,42 @@ impl Client {
 
     // ---- Config access ----
 
-    /// Returns a copy of the client configuration.
+    /// Returns a reference to the client configuration.
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// Consume this client and create a new one with the given config,
+    /// preserving the current token state.
+    pub async fn update_config(self, mut new_config: Config) -> crate::Result<Client> {
+        new_config.set_defaults();
+        new_config.validate()?;
+
+        let rate_limiter = Arc::new(RateLimiter::new(&RateLimiterConfig::default()));
+
+        let http_client = HttpClient::new(
+            new_config.http_timeout,
+            new_config.retry_config.clone(),
+            Some(Arc::clone(&rate_limiter)),
+            Some(&new_config.base_url),
+            Some(&new_config.user_agent),
+        )?;
+
+        let state = self.token_state.read().await;
+        let access_token = state.access_token.clone();
+        let token_info = state.token_info.clone();
+        drop(state);
+
+        Ok(Client {
+            config: new_config,
+            http_client,
+            rate_limiter: Some(rate_limiter),
+            token_storage: self.token_storage,
+            token_state: RwLock::new(TokenState {
+                access_token,
+                token_info,
+            }),
+        })
     }
 
     // ---- Rate limit access ----
@@ -522,6 +605,30 @@ impl Client {
         } else {
             false
         }
+    }
+
+    /// Disable rate limiting. Requests will not be throttled.
+    pub async fn disable_rate_limiting(&self) {
+        if let Some(ref rl) = self.rate_limiter {
+            rl.disable().await;
+        }
+    }
+
+    /// Enable rate limiting.
+    pub async fn enable_rate_limiting(&self) {
+        if let Some(ref rl) = self.rate_limiter {
+            rl.enable().await;
+        }
+    }
+
+    /// Wait until the rate limiter allows a request.
+    pub async fn wait_for_rate_limit(&self) -> crate::Result<()> {
+        if let Some(ref rl) = self.rate_limiter {
+            if rl.should_wait().await {
+                rl.wait().await?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -672,5 +779,47 @@ mod tests {
         let status = client.rate_limit_status().await;
         assert!(status.is_some());
         assert_eq!(status.unwrap().limit, 100);
+    }
+
+    // with_token requires a live API call (debug_token), so it is tested
+    // in examples/validate.rs rather than here.
+
+    #[tokio::test]
+    async fn test_client_update_config() {
+        let client = Client::new(test_config()).await.unwrap();
+        let token = TokenInfo {
+            access_token: "keep-me".into(),
+            token_type: "Bearer".into(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            user_id: "u-1".into(),
+            created_at: Utc::now(),
+        };
+        client.set_token_info(token).await.unwrap();
+
+        let mut new_config = test_config();
+        new_config.debug = true;
+        let new_client = client.update_config(new_config).await.unwrap();
+
+        assert!(new_client.config().debug);
+        assert_eq!(new_client.access_token().await, "keep-me");
+    }
+
+    #[tokio::test]
+    async fn test_client_disable_enable_rate_limiting() {
+        let client = Client::new(test_config()).await.unwrap();
+        assert!(!client.is_rate_limited().await);
+
+        client.disable_rate_limiting().await;
+        // Even if marked rate limited, should not report as limited when disabled
+        // (tested at the rate_limiter level)
+
+        client.enable_rate_limiting().await;
+    }
+
+    #[tokio::test]
+    async fn test_client_wait_for_rate_limit() {
+        let client = Client::new(test_config()).await.unwrap();
+        // Should return immediately when not rate-limited
+        client.wait_for_rate_limit().await.unwrap();
     }
 }

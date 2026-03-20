@@ -227,6 +227,83 @@ impl Client {
         resp.json()
     }
 
+    /// Validate the current token locally: non-empty and not expired.
+    pub async fn validate_token(&self) -> crate::Result<()> {
+        let state = self.get_token_info().await;
+        match state {
+            Some(info) => {
+                if info.access_token.is_empty() {
+                    return Err(error::new_authentication_error(401, "Token is empty", ""));
+                }
+                if Utc::now() > info.expires_at {
+                    return Err(error::new_authentication_error(
+                        401,
+                        "Token has expired",
+                        "",
+                    ));
+                }
+                Ok(())
+            }
+            None => Err(error::new_authentication_error(
+                401,
+                "No token available",
+                "",
+            )),
+        }
+    }
+
+    /// Validate the current token and auto-refresh if expired.
+    pub async fn ensure_valid_token(&self) -> crate::Result<()> {
+        match self.validate_token().await {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                // Attempt refresh
+                self.refresh_token().await
+            }
+        }
+    }
+
+    /// Return debug information about the current token.
+    ///
+    /// The access token is masked (first 4 + last 4 characters shown).
+    pub async fn get_token_debug_info(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        let state = self.get_token_info().await;
+        match state {
+            Some(token_info) => {
+                let masked = if token_info.access_token.len() > 8 {
+                    let len = token_info.access_token.len();
+                    format!(
+                        "{}...{}",
+                        &token_info.access_token[..4],
+                        &token_info.access_token[len - 4..]
+                    )
+                } else {
+                    "****".to_owned()
+                };
+                info.insert("access_token".into(), masked);
+                info.insert("token_type".into(), token_info.token_type.clone());
+                info.insert("expires_at".into(), token_info.expires_at.to_rfc3339());
+                info.insert("user_id".into(), token_info.user_id.clone());
+                info.insert("created_at".into(), token_info.created_at.to_rfc3339());
+                info.insert(
+                    "is_expired".into(),
+                    (Utc::now() > token_info.expires_at).to_string(),
+                );
+            }
+            None => {
+                info.insert("status".into(), "no_token".into());
+            }
+        }
+        info
+    }
+
+    /// Explicitly reload the token from storage.
+    pub async fn load_token_from_storage(&self) -> crate::Result<()> {
+        let loaded = self.token_storage.load().await?;
+        self.set_token_info(loaded).await
+    }
+
     /// Store a token built from a previous `debug_token` response.
     ///
     /// Useful for bootstrapping the client from a known-valid token without
@@ -391,5 +468,73 @@ mod tests {
         assert_eq!(resp.data.issued_at, 1699900000);
         assert_eq!(resp.data.scopes.len(), 2);
         assert_eq!(resp.data.user_id, "987654");
+    }
+
+    #[tokio::test]
+    async fn test_validate_token_no_token() {
+        let client = Client::new(test_config()).await.unwrap();
+        assert!(client.validate_token().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_token_valid() {
+        let client = Client::new(test_config()).await.unwrap();
+        let token = crate::client::TokenInfo {
+            access_token: "valid-tok".into(),
+            token_type: "Bearer".into(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            user_id: "u-1".into(),
+            created_at: Utc::now(),
+        };
+        client.set_token_info(token).await.unwrap();
+        assert!(client.validate_token().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_validate_token_expired() {
+        let client = Client::new(test_config()).await.unwrap();
+        let token = crate::client::TokenInfo {
+            access_token: "expired-tok".into(),
+            token_type: "Bearer".into(),
+            expires_at: Utc::now() - chrono::Duration::hours(1),
+            user_id: "u-1".into(),
+            created_at: Utc::now() - chrono::Duration::hours(2),
+        };
+        client.set_token_info(token).await.unwrap();
+        assert!(client.validate_token().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_token_debug_info_no_token() {
+        let client = Client::new(test_config()).await.unwrap();
+        let info = client.get_token_debug_info().await;
+        assert_eq!(info.get("status").unwrap(), "no_token");
+    }
+
+    #[tokio::test]
+    async fn test_get_token_debug_info_with_token() {
+        let client = Client::new(test_config()).await.unwrap();
+        let token = crate::client::TokenInfo {
+            access_token: "abcdefghijklmnop".into(),
+            token_type: "Bearer".into(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            user_id: "u-1".into(),
+            created_at: Utc::now(),
+        };
+        client.set_token_info(token).await.unwrap();
+        let info = client.get_token_debug_info().await;
+        let masked = info.get("access_token").unwrap();
+        assert!(masked.starts_with("abcd"));
+        assert!(masked.ends_with("mnop"));
+        assert!(masked.contains("..."));
+        assert_eq!(info.get("user_id").unwrap(), "u-1");
+        assert_eq!(info.get("is_expired").unwrap(), "false");
+    }
+
+    #[tokio::test]
+    async fn test_load_token_from_storage_empty() {
+        let client = Client::new(test_config()).await.unwrap();
+        // No token stored — should error
+        assert!(client.load_token_from_storage().await.is_err());
     }
 }

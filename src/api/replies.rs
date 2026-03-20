@@ -4,7 +4,9 @@ use crate::client::Client;
 use crate::constants;
 use crate::error;
 use crate::http::RequestBody;
-use crate::types::{PendingRepliesOptions, PostId, RepliesOptions, RepliesResponse};
+use crate::types::{
+    PendingRepliesOptions, Post, PostId, RepliesOptions, RepliesResponse, TextPostContent,
+};
 use crate::validation;
 
 impl Client {
@@ -207,6 +209,59 @@ impl Client {
         let body = RequestBody::Form(params);
         self.http_client.post(&path, Some(body), &token).await?;
         Ok(())
+    }
+
+    /// Reply to a post with text.
+    ///
+    /// Convenience wrapper: builds a `TextPostContent` with `reply_to_id` set
+    /// and delegates to `create_text_post`.
+    pub async fn reply_to_post(&self, post_id: &PostId, text: &str) -> crate::Result<Post> {
+        if !post_id.is_valid() {
+            return Err(error::new_validation_error(
+                0,
+                constants::ERR_EMPTY_POST_ID,
+                "",
+                "post_id",
+            ));
+        }
+
+        let content = TextPostContent {
+            text: text.to_owned(),
+            reply_to_id: Some(post_id.clone()),
+            link_attachment: None,
+            poll_attachment: None,
+            reply_control: None,
+            topic_tag: None,
+            allowlisted_country_codes: None,
+            location_id: None,
+            auto_publish_text: false,
+            quoted_post_id: None,
+            text_entities: None,
+            text_attachment: None,
+            gif_attachment: None,
+            is_ghost_post: false,
+            enable_reply_approvals: false,
+        };
+        self.create_text_post(&content).await
+    }
+
+    /// Create a reply from a `TextPostContent`.
+    ///
+    /// Validates that `reply_to_id` is set, adds a 10-second delay
+    /// (recommended by the Threads API for replies), then delegates
+    /// to `create_text_post`.
+    pub async fn create_reply(&self, content: &TextPostContent) -> crate::Result<Post> {
+        if content.reply_to_id.is_none() {
+            return Err(error::new_validation_error(
+                0,
+                "reply_to_id is required for create_reply",
+                "",
+                "reply_to_id",
+            ));
+        }
+
+        tokio::time::sleep(constants::REPLY_PUBLISH_DELAY).await;
+        self.create_text_post(content).await
     }
 
     /// Unhide a reply.

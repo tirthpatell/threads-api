@@ -66,6 +66,10 @@ pub enum MediaType {
     Video,
     #[serde(rename = "CAROUSEL")]
     Carousel,
+    #[serde(rename = "CAROUSEL_ALBUM")]
+    CarouselAlbum,
+    #[serde(rename = "REPOST_FACADE")]
+    RepostFacade,
 }
 
 /// Poll options when creating a post with a poll.

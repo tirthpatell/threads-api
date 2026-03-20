@@ -202,6 +202,77 @@ impl Client {
         self.publish_container(&container_id).await
     }
 
+    /// Create a quote post — a text post that quotes another post.
+    pub async fn create_quote_post(
+        &self,
+        text: &str,
+        quoted_post_id: &PostId,
+    ) -> crate::Result<Post> {
+        let content = TextPostContent {
+            text: text.to_owned(),
+            quoted_post_id: Some(quoted_post_id.clone()),
+            link_attachment: None,
+            poll_attachment: None,
+            reply_control: None,
+            reply_to_id: None,
+            topic_tag: None,
+            allowlisted_country_codes: None,
+            location_id: None,
+            auto_publish_text: false,
+            text_entities: None,
+            text_attachment: None,
+            gif_attachment: None,
+            is_ghost_post: false,
+            enable_reply_approvals: false,
+        };
+        self.create_text_post(&content).await
+    }
+
+    /// Create a media container and return its ID.
+    ///
+    /// Public wrapper around the internal container creation. Useful for
+    /// building custom publishing flows (e.g. carousel children).
+    pub async fn create_media_container(
+        &self,
+        media_type: &str,
+        media_url: &str,
+        alt_text: Option<&str>,
+    ) -> crate::Result<ContainerId> {
+        let token = self.access_token().await;
+        if token.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                "Access token is required",
+                "",
+            ));
+        }
+
+        let user_id = self.user_id().await;
+        if user_id.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "",
+            ));
+        }
+
+        let mut params = HashMap::new();
+        params.insert("media_type".into(), media_type.to_owned());
+
+        let url_key = match media_type {
+            "VIDEO" => "video_url",
+            _ => "image_url",
+        };
+        params.insert(url_key.into(), media_url.to_owned());
+
+        if let Some(alt) = alt_text {
+            params.insert("alt_text".into(), alt.to_owned());
+        }
+
+        let id = self.create_container(params).await?;
+        Ok(ContainerId::from(id.as_str()))
+    }
+
     /// Repost an existing post.
     pub async fn repost_post(&self, post_id: &PostId) -> crate::Result<Post> {
         if !post_id.is_valid() {
@@ -222,23 +293,18 @@ impl Client {
             ));
         }
 
-        let user_id = self.user_id().await;
-        if user_id.is_empty() {
-            return Err(error::new_authentication_error(
-                401,
-                constants::ERR_EMPTY_USER_ID,
-                "",
-            ));
+        // Use the direct repost endpoint
+        let path = format!("/{}/repost", post_id);
+        let resp = self.http_client.post(&path, None, &token).await?;
+
+        #[derive(serde::Deserialize)]
+        struct RepostResponse {
+            id: String,
         }
 
-        let mut params = HashMap::new();
-        params.insert("media_type".into(), "REPOST".into());
-        params.insert("repost_media_id".into(), post_id.to_string());
-
-        let container_id = self.create_container(params).await?;
-        let cid = ContainerId::from(container_id.as_str());
-        self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        let repost_resp: RepostResponse = resp.json()?;
+        let repost_id = PostId::from(repost_resp.id.as_str());
+        self.get_post(&repost_id).await
     }
 
     /// Get the status of a media container.

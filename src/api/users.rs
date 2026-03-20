@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
-use crate::types::{PostsOptions, PublicUser, RepliesResponse, User, UserId};
+use crate::types::{PostsOptions, PostsResponse, PublicUser, RepliesResponse, User, UserId};
 use crate::validation;
 
 impl Client {
@@ -59,6 +59,85 @@ impl Client {
         let resp = self
             .http_client
             .get("/profile_lookup", params, &token)
+            .await?;
+        resp.json()
+    }
+
+    /// Get a user profile with custom field selection.
+    pub async fn get_user_with_fields(
+        &self,
+        user_id: &UserId,
+        fields: &[&str],
+    ) -> crate::Result<User> {
+        if !user_id.is_valid() {
+            return Err(error::new_validation_error(
+                0,
+                constants::ERR_EMPTY_USER_ID,
+                "",
+                "user_id",
+            ));
+        }
+
+        let token = self.access_token().await;
+        let mut params = HashMap::new();
+
+        let fields_str = if fields.is_empty() {
+            constants::USER_PROFILE_FIELDS.to_owned()
+        } else {
+            fields.join(",")
+        };
+        params.insert("fields".into(), fields_str);
+
+        let path = format!("/{}", user_id);
+        let resp = self.http_client.get(&path, params, &token).await?;
+        resp.json()
+    }
+
+    /// Get posts from a public user profile by username.
+    pub async fn get_public_profile_posts(
+        &self,
+        username: &str,
+        opts: Option<&PostsOptions>,
+    ) -> crate::Result<PostsResponse> {
+        if username.is_empty() {
+            return Err(error::new_validation_error(
+                0,
+                "Username is required",
+                "",
+                "username",
+            ));
+        }
+
+        if let Some(opts) = opts {
+            validation::validate_limit(opts.limit)?;
+        }
+
+        let token = self.access_token().await;
+        let mut params = HashMap::new();
+        params.insert("username".into(), username.to_owned());
+        params.insert("fields".into(), constants::POST_EXTENDED_FIELDS.into());
+
+        if let Some(opts) = opts {
+            if let Some(limit) = opts.limit {
+                params.insert("limit".into(), limit.to_string());
+            }
+            if let Some(ref before) = opts.before {
+                params.insert("before".into(), before.clone());
+            }
+            if let Some(ref after) = opts.after {
+                params.insert("after".into(), after.clone());
+            }
+            if let Some(since) = opts.since {
+                params.insert("since".into(), since.to_string());
+            }
+            if let Some(until) = opts.until {
+                params.insert("until".into(), until.to_string());
+            }
+        }
+
+        let resp = self
+            .http_client
+            .get("/public_profile_posts", params, &token)
             .await?;
         resp.json()
     }

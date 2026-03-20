@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
-use crate::types::{PaginationOptions, Post, PostId, PostsOptions, PostsResponse, UserId};
+use crate::types::{
+    PaginationOptions, Post, PostId, PostsOptions, PostsResponse, PublishingLimits, UserId,
+};
 use crate::validation;
 
 impl Client {
@@ -151,5 +153,37 @@ impl Client {
         let path = format!("/{}/ghost_posts", user_id);
         let resp = self.http_client.get(&path, params, &token).await?;
         resp.json()
+    }
+
+    /// Get the publishing rate limits for the authenticated user.
+    pub async fn get_publishing_limits(&self) -> crate::Result<PublishingLimits> {
+        let user_id = self.user_id().await;
+        if user_id.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+
+        let token = self.access_token().await;
+        let mut params = HashMap::new();
+        params.insert("fields".into(), constants::PUBLISHING_LIMIT_FIELDS.into());
+
+        let path = format!("/{}/threads_publishing_limit", user_id);
+        let resp = self.http_client.get(&path, params, &token).await?;
+
+        // API wraps publishing limits in {"data": [PublishingLimits]}
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            data: Vec<PublishingLimits>,
+        }
+
+        let wrapper: Wrapper = resp.json()?;
+        wrapper
+            .data
+            .into_iter()
+            .next()
+            .ok_or_else(|| error::new_api_error(0, "No publishing limits data returned", "", ""))
     }
 }
