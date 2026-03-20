@@ -56,7 +56,7 @@ impl Client {
         let mut params = HashMap::new();
 
         let metric_str = if metrics.is_empty() {
-            "views,reach,replies,reposts,quotes,followers_count".to_owned()
+            "views,likes,replies,reposts,quotes,followers_count".to_owned()
         } else {
             metrics.join(",")
         };
@@ -158,7 +158,7 @@ impl Client {
                 })
                 .collect::<Vec<_>>()
                 .join(","),
-            _ => "views,reach,replies,reposts,quotes,followers_count".to_owned(),
+            _ => "views,likes,replies,reposts,quotes,followers_count".to_owned(),
         };
         params.insert("metric".into(), metric_str);
 

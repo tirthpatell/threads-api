@@ -32,14 +32,23 @@ pub const VALID_SCOPES: &[&str] = &[
 /// Configuration for the Threads API client.
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// OAuth application client ID.
     pub client_id: String,
+    /// OAuth application client secret.
     pub client_secret: String,
+    /// OAuth redirect URI.
     pub redirect_uri: String,
+    /// OAuth scopes to request.
     pub scopes: Vec<String>,
+    /// HTTP request timeout.
     pub http_timeout: Duration,
+    /// Retry configuration for failed requests.
     pub retry_config: RetryConfig,
+    /// Base URL for the Threads API.
     pub base_url: String,
+    /// User-Agent header value.
     pub user_agent: String,
+    /// Enable debug logging.
     pub debug: bool,
 }
 
@@ -239,10 +248,15 @@ impl Config {
 /// Information about the current access token.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TokenInfo {
+    /// The OAuth access token.
     pub access_token: String,
+    /// Token type (usually "bearer").
     pub token_type: String,
+    /// When the token expires.
     pub expires_at: DateTime<Utc>,
+    /// App-scoped user ID.
     pub user_id: String,
+    /// When the token was created.
     pub created_at: DateTime<Utc>,
 }
 
@@ -251,11 +265,14 @@ pub struct TokenInfo {
 /// All methods are async so implementations can perform I/O (file, database,
 /// remote store) without blocking the Tokio executor.
 pub trait TokenStorage: Send + Sync {
+    /// Store a token.
     fn store(
         &self,
         token: &TokenInfo,
     ) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>>;
+    /// Load the stored token.
     fn load(&self) -> Pin<Box<dyn Future<Output = crate::Result<TokenInfo>> + Send + '_>>;
+    /// Delete the stored token.
     fn delete(&self) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>>;
 }
 
@@ -265,6 +282,7 @@ pub struct MemoryTokenStorage {
 }
 
 impl MemoryTokenStorage {
+    /// Create a new empty in-memory token store.
     pub fn new() -> Self {
         Self {
             token: std::sync::Mutex::new(None),

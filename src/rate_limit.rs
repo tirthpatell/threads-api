@@ -6,26 +6,37 @@ use tokio::sync::RwLock;
 /// Rate limit information extracted from API response headers.
 #[derive(Debug, Clone)]
 pub struct RateLimitInfo {
+    /// Maximum requests allowed per window.
     pub limit: u32,
+    /// Requests remaining in the current window.
     pub remaining: u32,
+    /// When the rate limit window resets.
     pub reset: DateTime<Utc>,
+    /// Suggested wait time from the API.
     pub retry_after: Option<Duration>,
 }
 
 /// Snapshot of the current rate limit status.
 #[derive(Debug, Clone)]
 pub struct RateLimitStatus {
+    /// Maximum requests allowed per window.
     pub limit: u32,
+    /// Requests remaining in the current window.
     pub remaining: u32,
+    /// When the rate limit window resets.
     pub reset_time: DateTime<Utc>,
+    /// Duration until the window resets.
     pub reset_in: Duration,
 }
 
 /// Configuration for the rate limiter.
 #[derive(Debug, Clone)]
 pub struct RateLimiterConfig {
+    /// Starting request limit.
     pub initial_limit: u32,
+    /// Exponential backoff multiplier.
     pub backoff_multiplier: f64,
+    /// Maximum backoff duration.
     pub max_backoff: Duration,
 }
 

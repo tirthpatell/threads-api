@@ -16,33 +16,46 @@ use crate::http::RequestBody;
 /// Response from the short-lived token exchange (`/oauth/access_token`).
 #[derive(Debug, Deserialize)]
 pub struct TokenResponse {
+    /// The OAuth access token.
     pub access_token: String,
+    /// Token type (usually "bearer").
     pub token_type: String,
+    /// Token lifetime in seconds.
     pub expires_in: Option<i64>,
+    /// App-scoped user ID.
     pub user_id: Option<i64>,
 }
 
 /// Response from the long-lived token exchange (`/access_token`).
 #[derive(Debug, Deserialize)]
 pub struct LongLivedTokenResponse {
+    /// The long-lived access token.
     pub access_token: String,
+    /// Token type (usually "bearer").
     pub token_type: String,
+    /// Token lifetime in seconds (typically 5184000 for 60 days).
     pub expires_in: i64,
 }
 
 /// Response from the debug token endpoint (`/debug_token`).
 #[derive(Debug, Deserialize)]
 pub struct DebugTokenResponse {
+    /// Token introspection data.
     pub data: DebugTokenData,
 }
 
 /// Inner payload of a debug-token response.
 #[derive(Debug, Deserialize)]
 pub struct DebugTokenData {
+    /// Whether the token is currently valid.
     pub is_valid: bool,
+    /// Unix timestamp when the token expires.
     pub expires_at: i64,
+    /// Unix timestamp when the token was issued.
     pub issued_at: i64,
+    /// OAuth scopes granted to the token.
     pub scopes: Vec<String>,
+    /// App-scoped user ID.
     pub user_id: String,
 }
 
@@ -253,12 +266,19 @@ impl Client {
     }
 
     /// Validate the current token and auto-refresh if expired.
+    ///
+    /// Only attempts a refresh when the token exists but has expired.
+    /// Returns the original error for other failures (no token, empty token).
     pub async fn ensure_valid_token(&self) -> crate::Result<()> {
         match self.validate_token().await {
             Ok(()) => Ok(()),
-            Err(_) => {
-                // Attempt refresh
-                self.refresh_token().await
+            Err(e) => {
+                // Only refresh if we have a token that expired
+                if self.is_token_expired().await && self.get_token_info().await.is_some() {
+                    self.refresh_token().await
+                } else {
+                    Err(e)
+                }
             }
         }
     }

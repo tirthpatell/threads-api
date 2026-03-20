@@ -29,7 +29,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // get_token_debug_info
     print_test("get_token_debug_info");
     let debug_info = client.get_token_debug_info().await;
-    pass(&format!("masked={}", debug_info["access_token"]));
+    pass(&format!(
+        "masked={}",
+        debug_info
+            .get("access_token")
+            .map(|s| s.as_str())
+            .unwrap_or("(none)")
+    ));
 
     // get_user
     print_test("get_user");
@@ -355,7 +361,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
     match (c1, c2) {
         (Ok(cid1), Ok(cid2)) => {
-            sleep(3).await; // Wait for containers to process
+            // Poll until both containers are ready
+            wait_container_ready(&client, &cid1).await;
+            wait_container_ready(&client, &cid2).await;
             let content = CarouselPostContent {
                 text: Some(format!("Rust carousel test {}", now_str())),
                 children: vec![cid1, cid2],
@@ -469,6 +477,20 @@ fn now_str() -> String {
 
 async fn sleep(secs: u64) {
     tokio::time::sleep(Duration::from_secs(secs)).await;
+}
+
+async fn wait_container_ready(client: &Client, cid: &ContainerId) {
+    for _ in 0..30 {
+        match client.get_container_status(cid).await {
+            Ok(status) if status.status == "FINISHED" || status.status == "PUBLISHED" => return,
+            Ok(status) if status.status == "ERROR" || status.status == "EXPIRED" => {
+                println!("    container {cid} failed: {}", status.status);
+                return;
+            }
+            _ => sleep(1).await,
+        }
+    }
+    println!("    container {cid} did not finish in time");
 }
 
 async fn cleanup(client: &Client, post_id: &PostId) {

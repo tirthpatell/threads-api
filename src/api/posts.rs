@@ -231,7 +231,12 @@ impl Client {
     /// Create a media container and return its ID.
     ///
     /// Public wrapper around the internal container creation. Useful for
-    /// building custom publishing flows (e.g. carousel children).
+    /// building carousel children or custom publishing flows.
+    ///
+    /// **Note:** The container is returned immediately after creation. The
+    /// caller must poll [`get_container_status`](Self::get_container_status)
+    /// until the status is `FINISHED` before using the container in a
+    /// publish call (e.g. `create_carousel_post`).
     pub async fn create_media_container(
         &self,
         media_type: &str,

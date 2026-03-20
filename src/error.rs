@@ -6,70 +6,117 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// All error variants returned by the Threads API client.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// An authentication or authorization failure (e.g. invalid/expired token).
     #[error("authentication error {code} ({error_type}): {message}")]
     Authentication {
+        /// API error code.
         code: u16,
+        /// Human-readable error message.
         message: String,
+        /// Machine-readable error category.
         error_type: String,
+        /// Additional detail string from the API.
         details: String,
+        /// Whether the API flagged this error as transient.
         is_transient: bool,
+        /// HTTP status code of the response.
         http_status_code: u16,
+        /// API error sub-code for finer classification.
         error_subcode: u16,
     },
 
+    /// The request was throttled by the API rate limiter.
     #[error("rate limit error {code}: {message}")]
     RateLimit {
+        /// API error code.
         code: u16,
+        /// Human-readable error message.
         message: String,
+        /// Machine-readable error category.
         error_type: String,
+        /// Additional detail string from the API.
         details: String,
+        /// Suggested wait time before retrying.
         retry_after: Duration,
+        /// Whether the API flagged this error as transient.
         is_transient: bool,
+        /// HTTP status code of the response.
         http_status_code: u16,
+        /// API error sub-code for finer classification.
         error_subcode: u16,
     },
 
+    /// A request parameter or payload failed validation.
     #[error("validation error {code}: {message}")]
     Validation {
+        /// API error code.
         code: u16,
+        /// Human-readable error message.
         message: String,
+        /// Machine-readable error category.
         error_type: String,
+        /// Additional detail string from the API.
         details: String,
+        /// Name of the invalid field.
         field: String,
+        /// Whether the API flagged this error as transient.
         is_transient: bool,
+        /// HTTP status code of the response.
         http_status_code: u16,
+        /// API error sub-code for finer classification.
         error_subcode: u16,
     },
 
+    /// A transport-level failure (DNS, TCP, TLS, timeout, etc.).
     #[error("network error: {message}")]
     Network {
+        /// API error code.
         code: u16,
+        /// Human-readable error message.
         message: String,
+        /// Machine-readable error category.
         error_type: String,
+        /// Additional detail string from the API.
         details: String,
+        /// Whether the failure appears to be temporary.
         temporary: bool,
+        /// Whether the API flagged this error as transient.
         is_transient: bool,
+        /// HTTP status code of the response.
         http_status_code: u16,
+        /// API error sub-code for finer classification.
         error_subcode: u16,
+        /// Optional underlying reqwest error.
         #[source]
         cause: Option<reqwest::Error>,
     },
 
+    /// A generic API error that does not fit a more specific variant.
     #[error("API error {code}: {message}")]
     Api {
+        /// API error code.
         code: u16,
+        /// Human-readable error message.
         message: String,
+        /// Machine-readable error category.
         error_type: String,
+        /// Additional detail string from the API.
         details: String,
+        /// Server-assigned request identifier for support/debugging.
         request_id: String,
+        /// Whether the API flagged this error as transient.
         is_transient: bool,
+        /// HTTP status code of the response.
         http_status_code: u16,
+        /// API error sub-code for finer classification.
         error_subcode: u16,
     },
 
+    /// An HTTP-level error from the underlying reqwest client.
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
 
+    /// A JSON serialization or deserialization error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -170,12 +217,19 @@ pub fn new_api_error(code: u16, message: &str, details: &str, request_id: &str) 
 
 /// Base fields extracted from any typed error variant.
 pub struct BaseFields<'a> {
+    /// API error code.
     pub code: u16,
+    /// Human-readable error message.
     pub message: &'a str,
+    /// Machine-readable error category.
     pub error_type: &'a str,
+    /// Additional detail string from the API.
     pub details: &'a str,
+    /// Whether the API flagged this error as transient.
     pub is_transient: bool,
+    /// HTTP status code of the response.
     pub http_status_code: u16,
+    /// API error sub-code for finer classification.
     pub error_subcode: u16,
 }
 

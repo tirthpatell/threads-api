@@ -13,27 +13,39 @@ use crate::rate_limit::{RateLimitInfo, RateLimiter};
 /// Body for HTTP requests.
 #[derive(Debug)]
 pub enum RequestBody {
+    /// JSON request body.
     Json(serde_json::Value),
+    /// URL-encoded form body.
     Form(HashMap<String, String>),
 }
 
 /// Options for an HTTP request.
 #[derive(Debug)]
 pub struct RequestOptions {
+    /// HTTP method.
     pub method: reqwest::Method,
+    /// API endpoint path.
     pub path: String,
+    /// URL query parameters.
     pub query_params: HashMap<String, String>,
+    /// Optional request body.
     pub body: Option<RequestBody>,
+    /// Additional HTTP headers.
     pub headers: HashMap<String, String>,
 }
 
 /// Response wrapper with metadata.
 #[derive(Debug)]
 pub struct Response {
+    /// HTTP status code.
     pub status_code: u16,
+    /// Raw response body bytes.
     pub body: Vec<u8>,
+    /// Facebook request ID from `x-fb-request-id` header.
     pub request_id: String,
+    /// Rate limit info parsed from response headers.
     pub rate_limit: Option<RateLimitInfo>,
+    /// Round-trip request duration.
     pub duration: Duration,
 }
 
@@ -85,9 +97,13 @@ impl Response {
 /// Retry configuration for HTTP requests.
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
+    /// Maximum number of retry attempts.
     pub max_retries: u32,
+    /// Delay before the first retry.
     pub initial_delay: Duration,
+    /// Maximum delay between retries.
     pub max_delay: Duration,
+    /// Multiplier applied to delay after each retry.
     pub backoff_factor: f64,
 }
 

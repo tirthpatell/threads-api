@@ -108,6 +108,7 @@ pub struct ReplyIterator<'a> {
 }
 
 impl<'a> ReplyIterator<'a> {
+    /// Create a new reply iterator.
     pub fn new(client: &'a Client, post_id: PostId, options: Option<RepliesOptions>) -> Self {
         Self {
             client,
@@ -118,6 +119,7 @@ impl<'a> ReplyIterator<'a> {
         }
     }
 
+    /// Fetch the next page. Returns `None` when exhausted.
     pub async fn next(&mut self) -> crate::Result<Option<RepliesResponse>> {
         if self.done {
             return Ok(None);
@@ -144,15 +146,18 @@ impl<'a> ReplyIterator<'a> {
         Ok(Some(resp))
     }
 
+    /// Returns `true` if there are more pages.
     pub fn has_next(&self) -> bool {
         !self.done
     }
 
+    /// Reset to the first page.
     pub fn reset(&mut self) {
         self.cursor = None;
         self.done = false;
     }
 
+    /// Collect all remaining pages into a single `Vec<Post>`.
     pub async fn collect_all(&mut self) -> crate::Result<Vec<Post>> {
         let mut all = Vec::new();
         while self.has_next() {
@@ -178,6 +183,7 @@ pub struct SearchIterator<'a> {
 }
 
 impl<'a> SearchIterator<'a> {
+    /// Create a new search iterator.
     pub fn new(
         client: &'a Client,
         query: impl Into<String>,
@@ -192,6 +198,7 @@ impl<'a> SearchIterator<'a> {
         }
     }
 
+    /// Fetch the next page. Returns `None` when exhausted.
     pub async fn next(&mut self) -> crate::Result<Option<PostsResponse>> {
         if self.done {
             return Ok(None);
@@ -218,15 +225,18 @@ impl<'a> SearchIterator<'a> {
         Ok(Some(resp))
     }
 
+    /// Returns `true` if there are more pages.
     pub fn has_next(&self) -> bool {
         !self.done
     }
 
+    /// Reset to the first page.
     pub fn reset(&mut self) {
         self.cursor = None;
         self.done = false;
     }
 
+    /// Collect all remaining pages into a single `Vec<Post>`.
     pub async fn collect_all(&mut self) -> crate::Result<Vec<Post>> {
         let mut all = Vec::new();
         while self.has_next() {
