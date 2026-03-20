@@ -4,7 +4,7 @@ use super::common::{
     ChildrenData, GifAttachment, MediaType, PollAttachment, PollResult, PostOwner, ReplyControl,
     TextAttachment, TextEntity,
 };
-use super::ids::PostId;
+use super::ids::{ContainerId, PostId};
 use super::pagination::Paging;
 use super::time::ThreadsTime;
 
@@ -89,7 +89,7 @@ pub struct PostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to_id: Option<String>,
+    pub reply_to_id: Option<PostId>,
 }
 
 /// Content for creating a text post.
@@ -103,7 +103,7 @@ pub struct TextPostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_control: Option<ReplyControl>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to_id: Option<String>,
+    pub reply_to_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_tag: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -113,7 +113,7 @@ pub struct TextPostContent {
     #[serde(default)]
     pub auto_publish_text: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub quoted_post_id: Option<String>,
+    pub quoted_post_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_entities: Option<Vec<TextEntity>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -137,7 +137,7 @@ pub struct ImagePostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_control: Option<ReplyControl>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to_id: Option<String>,
+    pub reply_to_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_tag: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,7 +145,7 @@ pub struct ImagePostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub quoted_post_id: Option<String>,
+    pub quoted_post_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_entities: Option<Vec<TextEntity>>,
     #[serde(default)]
@@ -165,7 +165,7 @@ pub struct VideoPostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_control: Option<ReplyControl>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to_id: Option<String>,
+    pub reply_to_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_tag: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -173,7 +173,7 @@ pub struct VideoPostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub quoted_post_id: Option<String>,
+    pub quoted_post_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_entities: Option<Vec<TextEntity>>,
     #[serde(default)]
@@ -188,11 +188,11 @@ pub struct CarouselPostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     /// Container IDs for the carousel items.
-    pub children: Vec<String>,
+    pub children: Vec<ContainerId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_control: Option<ReplyControl>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to_id: Option<String>,
+    pub reply_to_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_tag: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -200,7 +200,7 @@ pub struct CarouselPostContent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub quoted_post_id: Option<String>,
+    pub quoted_post_id: Option<PostId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_entities: Option<Vec<TextEntity>>,
     #[serde(default)]

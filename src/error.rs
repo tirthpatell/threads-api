@@ -368,7 +368,11 @@ impl Error {
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::RateLimit { .. } => true,
-            Error::Network { temporary, .. } => *temporary,
+            Error::Network {
+                temporary,
+                is_transient,
+                ..
+            } => *temporary || *is_transient,
             _ => self.is_transient(),
         }
     }
@@ -420,6 +424,15 @@ mod tests {
         let err = new_network_error(0, "DNS failure", "", false);
         assert!(err.is_network());
         assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_network_error_transient_is_retryable() {
+        let mut err = new_network_error(0, "Transient failure", "", false);
+        assert!(!err.is_retryable());
+        set_error_metadata(&mut err, true, 503, 0);
+        assert!(err.is_transient());
+        assert!(err.is_retryable());
     }
 
     #[test]
