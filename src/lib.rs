@@ -2,7 +2,6 @@ pub mod constants;
 pub mod error;
 pub mod types;
 
-// Stub modules for future implementation
 pub mod api;
 pub mod auth;
 pub mod client;
