@@ -21,7 +21,7 @@
 //! let client = Client::with_token(config, "ACCESS_TOKEN").await?;
 //!
 //! let me = client.get_me().await?;
-//! println!("Logged in as @{}", me.username.unwrap_or_default());
+//! println!("Logged in as @{}", me.username);
 //! # Ok(())
 //! # }
 //! ```
