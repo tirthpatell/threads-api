@@ -291,9 +291,9 @@ mod tests {
         assert_eq!(decoded.len(), 32);
     }
 
-    #[test]
-    fn test_get_auth_url_contains_required_params() {
-        let client = Client::new(test_config()).unwrap();
+    #[tokio::test]
+    async fn test_get_auth_url_contains_required_params() {
+        let client = Client::new(test_config()).await.unwrap();
         let (url, state) = client.get_auth_url(&[]);
 
         assert!(url.starts_with("https://www.threads.net/oauth/authorize?"));
@@ -309,9 +309,9 @@ mod tests {
         assert!(url.contains(&format!("state={state}")));
     }
 
-    #[test]
-    fn test_get_auth_url_uses_custom_scopes() {
-        let client = Client::new(test_config()).unwrap();
+    #[tokio::test]
+    async fn test_get_auth_url_uses_custom_scopes() {
+        let client = Client::new(test_config()).await.unwrap();
         let scopes = vec!["threads_basic".into(), "threads_manage_replies".into()];
         let (url, _state) = client.get_auth_url(&scopes);
 
@@ -319,9 +319,9 @@ mod tests {
         assert!(url.contains("scope=threads_basic%2Cthreads_manage_replies"));
     }
 
-    #[test]
-    fn test_get_auth_url_uses_config_scopes_when_empty() {
-        let client = Client::new(test_config()).unwrap();
+    #[tokio::test]
+    async fn test_get_auth_url_uses_config_scopes_when_empty() {
+        let client = Client::new(test_config()).await.unwrap();
         let (url, _state) = client.get_auth_url(&[]);
 
         // Config default includes threads_basic

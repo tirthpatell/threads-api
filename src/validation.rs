@@ -212,7 +212,7 @@ pub fn validate_topic_tag(tag: &str) -> crate::Result<()> {
 /// Validate country codes: each must be exactly 2 alphabetic ASCII characters.
 pub fn validate_country_codes(codes: &[String]) -> crate::Result<()> {
     for (i, code) in codes.iter().enumerate() {
-        if code.len() != 2 {
+        if code.chars().count() != 2 {
             return Err(new_validation_error(
                 400,
                 &format!("allowlisted_country_codes[{i}] '{code}' must be exactly 2 characters"),

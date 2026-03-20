@@ -196,6 +196,9 @@ impl RateLimiter {
         inner.consecutive_rate_limits += 1;
         if reset_time > Utc::now() {
             inner.reset_time = reset_time;
+        } else {
+            // No valid reset time from the API — use a safe default
+            inner.reset_time = Utc::now() + chrono::Duration::seconds(60);
         }
         tracing::info!(
             consecutive = inner.consecutive_rate_limits,

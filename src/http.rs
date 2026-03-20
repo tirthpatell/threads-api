@@ -431,7 +431,8 @@ impl HttpClient {
                     .rate_limit
                     .as_ref()
                     .and_then(|rl| rl.retry_after)
-                    .unwrap_or(Duration::ZERO);
+                    .filter(|d| !d.is_zero())
+                    .unwrap_or(Duration::from_secs(60));
 
                 if let Some(ref rl) = self.rate_limiter {
                     let reset_time = resp

@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -245,10 +247,16 @@ pub struct TokenInfo {
 }
 
 /// Trait for persistent token storage.
+///
+/// All methods are async so implementations can perform I/O (file, database,
+/// remote store) without blocking the Tokio executor.
 pub trait TokenStorage: Send + Sync {
-    fn store(&self, token: &TokenInfo) -> crate::Result<()>;
-    fn load(&self) -> crate::Result<TokenInfo>;
-    fn delete(&self) -> crate::Result<()>;
+    fn store(
+        &self,
+        token: &TokenInfo,
+    ) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>>;
+    fn load(&self) -> Pin<Box<dyn Future<Output = crate::Result<TokenInfo>> + Send + '_>>;
+    fn delete(&self) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>>;
 }
 
 /// In-memory token storage (default).
@@ -271,36 +279,43 @@ impl Default for MemoryTokenStorage {
 }
 
 impl TokenStorage for MemoryTokenStorage {
-    fn store(&self, token: &TokenInfo) -> crate::Result<()> {
-        let mut guard = self
-            .token
-            .lock()
-            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
-        *guard = Some(token.clone());
-        Ok(())
-    }
-
-    fn load(&self) -> crate::Result<TokenInfo> {
-        let guard = self
-            .token
-            .lock()
-            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
-        guard.clone().ok_or_else(|| {
-            error::new_authentication_error(
-                401,
-                "No token stored",
-                "Token not found in memory storage",
-            )
+    fn store(
+        &self,
+        token: &TokenInfo,
+    ) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>> {
+        let token = token.clone();
+        Box::pin(async move {
+            let mut guard = self.token.lock().map_err(|_| {
+                error::new_authentication_error(500, "Token storage lock poisoned", "")
+            })?;
+            *guard = Some(token);
+            Ok(())
         })
     }
 
-    fn delete(&self) -> crate::Result<()> {
-        let mut guard = self
-            .token
-            .lock()
-            .map_err(|_| error::new_authentication_error(500, "Token storage lock poisoned", ""))?;
-        *guard = None;
-        Ok(())
+    fn load(&self) -> Pin<Box<dyn Future<Output = crate::Result<TokenInfo>> + Send + '_>> {
+        Box::pin(async move {
+            let guard = self.token.lock().map_err(|_| {
+                error::new_authentication_error(500, "Token storage lock poisoned", "")
+            })?;
+            guard.clone().ok_or_else(|| {
+                error::new_authentication_error(
+                    401,
+                    "No token stored",
+                    "Token not found in memory storage",
+                )
+            })
+        })
+    }
+
+    fn delete(&self) -> Pin<Box<dyn Future<Output = crate::Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            let mut guard = self.token.lock().map_err(|_| {
+                error::new_authentication_error(500, "Token storage lock poisoned", "")
+            })?;
+            *guard = None;
+            Ok(())
+        })
     }
 }
 
@@ -325,7 +340,7 @@ pub struct Client {
 
 impl Client {
     /// Create a new client with the given configuration.
-    pub fn new(mut config: Config) -> crate::Result<Self> {
+    pub async fn new(mut config: Config) -> crate::Result<Self> {
         config.set_defaults();
         config.validate()?;
 
@@ -342,7 +357,7 @@ impl Client {
         let token_storage: Box<dyn TokenStorage> = Box::new(MemoryTokenStorage::new());
 
         // Try to load existing token
-        let (access_token, token_info) = if let Ok(info) = token_storage.load() {
+        let (access_token, token_info) = if let Ok(info) = token_storage.load().await {
             let at = info.access_token.clone();
             (at, Some(info))
         } else {
@@ -362,7 +377,7 @@ impl Client {
     }
 
     /// Create a new client with custom token storage.
-    pub fn with_token_storage(
+    pub async fn with_token_storage(
         mut config: Config,
         token_storage: Box<dyn TokenStorage>,
     ) -> crate::Result<Self> {
@@ -379,7 +394,7 @@ impl Client {
             Some(&config.user_agent),
         )?;
 
-        let (access_token, token_info) = if let Ok(info) = token_storage.load() {
+        let (access_token, token_info) = if let Ok(info) = token_storage.load().await {
             let at = info.access_token.clone();
             (at, Some(info))
         } else {
@@ -399,16 +414,16 @@ impl Client {
     }
 
     /// Create a client from environment variables.
-    pub fn from_env() -> crate::Result<Self> {
+    pub async fn from_env() -> crate::Result<Self> {
         let config = Config::from_env()?;
-        Self::new(config)
+        Self::new(config).await
     }
 
     // ---- Token management ----
 
     /// Set token information (thread-safe).
     pub async fn set_token_info(&self, token_info: TokenInfo) -> crate::Result<()> {
-        self.token_storage.store(&token_info)?;
+        self.token_storage.store(&token_info).await?;
         let mut state = self.token_state.write().await;
         state.access_token = token_info.access_token.clone();
         state.token_info = Some(token_info);
@@ -450,7 +465,7 @@ impl Client {
 
     /// Clear the current token from the client and storage.
     pub async fn clear_token(&self) -> crate::Result<()> {
-        self.token_storage.delete()?;
+        self.token_storage.delete().await?;
         let mut state = self.token_state.write().await;
         state.access_token.clear();
         state.token_info = None;
@@ -567,10 +582,10 @@ mod tests {
         assert!(cfg.validate().is_err());
     }
 
-    #[test]
-    fn test_memory_token_storage() {
+    #[tokio::test]
+    async fn test_memory_token_storage() {
         let storage = MemoryTokenStorage::new();
-        assert!(storage.load().is_err());
+        assert!(storage.load().await.is_err());
 
         let token = TokenInfo {
             access_token: "test-token".into(),
@@ -580,24 +595,24 @@ mod tests {
             created_at: Utc::now(),
         };
 
-        storage.store(&token).unwrap();
-        let loaded = storage.load().unwrap();
+        storage.store(&token).await.unwrap();
+        let loaded = storage.load().await.unwrap();
         assert_eq!(loaded.access_token, "test-token");
 
-        storage.delete().unwrap();
-        assert!(storage.load().is_err());
+        storage.delete().await.unwrap();
+        assert!(storage.load().await.is_err());
     }
 
     #[tokio::test]
     async fn test_client_new() {
-        let client = Client::new(test_config()).unwrap();
+        let client = Client::new(test_config()).await.unwrap();
         assert!(!client.is_authenticated().await);
         assert!(client.is_token_expired().await);
     }
 
     #[tokio::test]
     async fn test_client_set_and_get_token() {
-        let client = Client::new(test_config()).unwrap();
+        let client = Client::new(test_config()).await.unwrap();
         let token = TokenInfo {
             access_token: "my-token".into(),
             token_type: "Bearer".into(),
@@ -615,7 +630,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_clear_token() {
-        let client = Client::new(test_config()).unwrap();
+        let client = Client::new(test_config()).await.unwrap();
         let token = TokenInfo {
             access_token: "tok".into(),
             token_type: "Bearer".into(),
@@ -633,7 +648,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_token_expiring_soon() {
-        let client = Client::new(test_config()).unwrap();
+        let client = Client::new(test_config()).await.unwrap();
         let token = TokenInfo {
             access_token: "tok".into(),
             token_type: "Bearer".into(),
@@ -653,7 +668,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_rate_limit_status() {
-        let client = Client::new(test_config()).unwrap();
+        let client = Client::new(test_config()).await.unwrap();
         let status = client.rate_limit_status().await;
         assert!(status.is_some());
         assert_eq!(status.unwrap().limit, 100);
