@@ -395,6 +395,21 @@ impl Client {
         if content.enable_reply_approvals {
             params.insert("enable_reply_approvals".into(), "true".into());
         }
+        if let Some(ref entities) = content.text_entities {
+            if let Ok(json) = serde_json::to_string(entities) {
+                params.insert("text_entities".into(), json);
+            }
+        }
+        if let Some(ref attachment) = content.text_attachment {
+            if let Ok(json) = serde_json::to_string(attachment) {
+                params.insert("text_attachment".into(), json);
+            }
+        }
+        if let Some(ref gif) = content.gif_attachment {
+            if let Ok(json) = serde_json::to_string(gif) {
+                params.insert("gif_attachment".into(), json);
+            }
+        }
 
         params
     }
@@ -445,6 +460,11 @@ impl Client {
         }
         if content.enable_reply_approvals {
             params.insert("enable_reply_approvals".into(), "true".into());
+        }
+        if let Some(ref entities) = content.text_entities {
+            if let Ok(json) = serde_json::to_string(entities) {
+                params.insert("text_entities".into(), json);
+            }
         }
 
         params
@@ -497,6 +517,11 @@ impl Client {
         if content.enable_reply_approvals {
             params.insert("enable_reply_approvals".into(), "true".into());
         }
+        if let Some(ref entities) = content.text_entities {
+            if let Ok(json) = serde_json::to_string(entities) {
+                params.insert("text_entities".into(), json);
+            }
+        }
 
         params
     }
@@ -545,6 +570,11 @@ impl Client {
         }
         if content.enable_reply_approvals {
             params.insert("enable_reply_approvals".into(), "true".into());
+        }
+        if let Some(ref entities) = content.text_entities {
+            if let Ok(json) = serde_json::to_string(entities) {
+                params.insert("text_entities".into(), json);
+            }
         }
 
         params
