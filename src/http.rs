@@ -136,17 +136,17 @@ impl HttpClient {
         opts: &RequestOptions,
         access_token: &str,
     ) -> crate::Result<Response> {
-        // Wait for rate limiter if we've been explicitly rate-limited
-        if let Some(ref rl) = self.rate_limiter {
-            if rl.should_wait().await {
-                rl.wait().await?;
-            }
-        }
-
         let mut last_err: Option<Error> = None;
         let mut delay = self.retry_config.initial_delay;
 
         for attempt in 0..=self.retry_config.max_retries {
+            // Check rate limiter before each attempt
+            if let Some(ref rl) = self.rate_limiter {
+                if rl.should_wait().await {
+                    rl.wait().await?;
+                }
+            }
+
             if attempt > 0 {
                 tokio::time::sleep(delay).await;
                 delay = Duration::from_secs_f64(
@@ -421,7 +421,13 @@ impl HttpClient {
 
         let details = String::from_utf8_lossy(&resp.body);
         let details = if details.len() > 500 {
-            format!("{}...", &details[..500])
+            let end = details
+                .char_indices()
+                .map(|(i, _)| i)
+                .take_while(|&i| i <= 500)
+                .last()
+                .unwrap_or(0);
+            format!("{}...", &details[..end])
         } else {
             details.into_owned()
         };

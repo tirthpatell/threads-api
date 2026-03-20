@@ -41,11 +41,10 @@ impl Client {
         }
 
         if content.auto_publish_text {
+            // Text containers are ready immediately — skip polling
             let params = self.build_text_params(content, &user_id);
-            let body = RequestBody::Form(params);
-            let path = format!("/{}/threads", user_id);
-            let resp = self.http_client.post(&path, Some(body), &token).await?;
-            return resp.json();
+            let container_id = self.create_container(params).await?;
+            return self.publish_container(&container_id).await;
         }
 
         let params = self.build_text_params(content, &user_id);
@@ -199,10 +198,10 @@ impl Client {
         params.insert("media_type".into(), "REPOST".into());
         params.insert("repost_media_id".into(), post_id.to_string());
 
-        let path = format!("/{}/threads", user_id);
-        let body = RequestBody::Form(params);
-        let resp = self.http_client.post(&path, Some(body), &token).await?;
-        resp.json()
+        let container_id = self.create_container(params).await?;
+        let cid = ContainerId::from(container_id.as_str());
+        self.wait_for_container_ready(&cid).await?;
+        self.publish_container(&container_id).await
     }
 
     /// Get the status of a media container.

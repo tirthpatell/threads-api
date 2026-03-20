@@ -315,7 +315,7 @@ struct TokenState {
     token_info: Option<TokenInfo>,
 }
 
-/// Threads API client. Thread-safe and cheaply cloneable via `Arc`.
+/// Threads API client. Thread-safe; wrap in `Arc<Client>` to share across tasks.
 pub struct Client {
     config: Config,
     pub(crate) http_client: HttpClient,

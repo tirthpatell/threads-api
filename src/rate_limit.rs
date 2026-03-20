@@ -48,6 +48,7 @@ struct Inner {
     max_backoff: Duration,
     rate_limited: bool,
     last_rate_limit_time: Option<Instant>,
+    consecutive_rate_limits: u32,
 }
 
 /// Manages API rate limiting with intelligent backoff.
@@ -86,6 +87,7 @@ impl RateLimiter {
                 max_backoff,
                 rate_limited: false,
                 last_rate_limit_time: None,
+                consecutive_rate_limits: 0,
             }),
         }
     }
@@ -107,6 +109,7 @@ impl RateLimiter {
                 inner.remaining = inner.limit;
                 inner.reset_time = Utc::now() + chrono::Duration::hours(1);
                 inner.rate_limited = false;
+                inner.consecutive_rate_limits = 0;
                 tracing::debug!(limit = inner.limit, "Rate limit window reset");
                 return Ok(());
             }
@@ -124,17 +127,18 @@ impl RateLimiter {
                     .to_std()
                     .unwrap_or(Duration::from_secs(1));
 
-                // Apply exponential backoff if hitting limits frequently
-                if let Some(last_rl) = inner.last_rate_limit_time {
-                    if last_rl.elapsed() < Duration::from_secs(60) {
-                        let backoff =
-                            Duration::from_secs_f64(inner.backoff_multiplier);
-                        if backoff > wait_time {
-                            wait_time = backoff;
-                        }
-                        if wait_time > inner.max_backoff {
-                            wait_time = inner.max_backoff;
-                        }
+                // Apply exponential backoff if hitting limits repeatedly
+                if inner.consecutive_rate_limits > 1 {
+                    let base_delay = Duration::from_secs(1);
+                    let exponent = (inner.consecutive_rate_limits - 1).min(10);
+                    let backoff_secs = base_delay.as_secs_f64()
+                        * inner.backoff_multiplier.powi(exponent as i32);
+                    let backoff = Duration::from_secs_f64(backoff_secs);
+                    if backoff > wait_time {
+                        wait_time = backoff;
+                    }
+                    if wait_time > inner.max_backoff {
+                        wait_time = inner.max_backoff;
                     }
                 }
 
@@ -182,10 +186,14 @@ impl RateLimiter {
         let mut inner = self.inner.write().await;
         inner.rate_limited = true;
         inner.last_rate_limit_time = Some(Instant::now());
+        inner.consecutive_rate_limits += 1;
         if reset_time > Utc::now() {
             inner.reset_time = reset_time;
         }
-        tracing::info!("Marked as rate limited by API");
+        tracing::info!(
+            consecutive = inner.consecutive_rate_limits,
+            "Marked as rate limited by API"
+        );
     }
 
     /// Returns a snapshot of the current rate limit status.
@@ -225,6 +233,7 @@ impl RateLimiter {
         inner.reset_time = Utc::now() + chrono::Duration::hours(1);
         inner.last_request_time = None;
         inner.rate_limited = false;
+        inner.consecutive_rate_limits = 0;
     }
 }
 
