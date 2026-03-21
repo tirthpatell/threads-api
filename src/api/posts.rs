@@ -481,6 +481,11 @@ impl Client {
                 params.insert("gif_attachment".into(), json);
             }
         }
+        if let Some(ref poll) = content.poll_attachment {
+            if let Ok(json) = serde_json::to_string(poll) {
+                params.insert("poll_attachment".into(), json);
+            }
+        }
 
         params
     }
