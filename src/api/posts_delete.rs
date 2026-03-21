@@ -3,6 +3,17 @@ use crate::constants;
 use crate::error;
 use crate::types::PostId;
 
+/// Response from the delete post endpoint.
+#[derive(Debug, serde::Deserialize)]
+struct DeleteResponse {
+    /// Whether the delete was successful.
+    #[serde(default)]
+    success: bool,
+    /// The deleted post's ID.
+    #[serde(default)]
+    deleted_id: Option<String>,
+}
+
 impl Client {
     /// Delete a post by ID. Returns the deleted post ID.
     pub async fn delete_post(&self, post_id: &PostId) -> crate::Result<String> {
@@ -19,18 +30,16 @@ impl Client {
         let path = format!("/{}", post_id);
         let resp = self.http_client.delete(&path, &token).await?;
 
-        // Try to parse the response for an id or success field.
-        // Fall back to returning the input post_id if unparseable.
-        #[derive(serde::Deserialize)]
-        struct DeleteResponse {
-            #[serde(default)]
-            id: Option<String>,
-            #[serde(default)]
-            _success: Option<bool>,
-        }
-
         if let Ok(del_resp) = serde_json::from_slice::<DeleteResponse>(&resp.body) {
-            if let Some(id) = del_resp.id {
+            if !del_resp.success {
+                return Err(error::new_api_error(
+                    0,
+                    "Delete request returned success=false",
+                    "",
+                    "",
+                ));
+            }
+            if let Some(id) = del_resp.deleted_id {
                 return Ok(id);
             }
         }

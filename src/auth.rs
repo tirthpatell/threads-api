@@ -72,6 +72,16 @@ pub struct AppAccessTokenResponse {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Build the app access token shorthand string.
+///
+/// Returns `"TH|{client_id}|{client_secret}"` or an empty string if either is empty.
+fn app_access_token_shorthand(client_id: &str, client_secret: &str) -> String {
+    if client_id.is_empty() || client_secret.is_empty() {
+        return String::new();
+    }
+    format!("TH|{client_id}|{client_secret}")
+}
+
 /// Generate a cryptographically-random state parameter (base64url, 32 bytes).
 fn generate_state() -> String {
     let bytes: [u8; 32] = rand::rng().random();
@@ -139,10 +149,7 @@ impl Client {
     /// `client_id` or `client_secret` are empty.
     pub fn get_app_access_token_shorthand(&self) -> String {
         let cfg = self.config();
-        if cfg.client_id.is_empty() || cfg.client_secret.is_empty() {
-            return String::new();
-        }
-        format!("TH|{}|{}", cfg.client_id, cfg.client_secret)
+        app_access_token_shorthand(&cfg.client_id, &cfg.client_secret)
     }
 
     /// Exchange an authorization code for a short-lived access token.
@@ -617,13 +624,18 @@ mod tests {
         assert_eq!(shorthand, "TH|test-client-id|test-secret");
     }
 
-    #[tokio::test]
-    async fn test_get_app_access_token_shorthand_empty_config() {
-        let config = Config::new("", "test-secret", "https://example.com/callback");
-        // Can't use Client::new with empty client_id (validation fails),
-        // so test the logic directly
-        if config.client_id.is_empty() || config.client_secret.is_empty() {
-            assert_eq!("", ""); // shorthand would be empty
-        }
+    #[test]
+    fn test_app_access_token_shorthand_empty_client_id() {
+        assert_eq!(app_access_token_shorthand("", "secret"), "");
+    }
+
+    #[test]
+    fn test_app_access_token_shorthand_empty_secret() {
+        assert_eq!(app_access_token_shorthand("id", ""), "");
+    }
+
+    #[test]
+    fn test_app_access_token_shorthand_both_empty() {
+        assert_eq!(app_access_token_shorthand("", ""), "");
     }
 }
