@@ -85,8 +85,7 @@ pub const POST_EXTENDED_FIELDS: &str = "id,media_product_type,media_type,media_u
 pub const GHOST_POST_FIELDS: &str = "id,media_product_type,media_type,media_url,permalink,owner,username,text,timestamp,shortcode,thumbnail_url,ghost_post_status,ghost_post_expiration_timestamp";
 
 /// Field set for user profile queries.
-pub const USER_PROFILE_FIELDS: &str =
-    "id,username,name,threads_profile_picture_url,threads_biography,is_verified,is_eligible_for_geo_gating,recently_searched_keywords";
+pub const USER_PROFILE_FIELDS: &str = "id,username,name,threads_profile_picture_url,threads_biography,is_verified,is_eligible_for_geo_gating,recently_searched_keywords";
 
 /// Field set for reply queries (`/{media-id}/replies` and `/{media-id}/conversation`).
 pub const REPLY_FIELDS: &str = "id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,has_replies,root_post,replied_to,is_reply,is_reply_owned_by_me,reply_audience,quoted_post,reposted_post,gif_url,hide_status,topic_tag,is_verified,profile_picture_url";
@@ -96,8 +95,7 @@ pub const REPLY_FIELDS: &str = "id,media_product_type,media_type,media_url,perma
 pub const PENDING_REPLY_FIELDS: &str = "id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,has_replies,root_post,replied_to,is_reply,is_reply_owned_by_me,reply_audience,quoted_post,reposted_post,gif_url,alt_text,hide_status,topic_tag,is_verified,profile_picture_url,reply_approval_status";
 
 /// Field set for public user profile queries.
-pub const PUBLIC_USER_FIELDS: &str =
-    "username,name,profile_picture_url,biography,is_verified,follower_count,likes_count,quotes_count,replies_count,reposts_count,views_count";
+pub const PUBLIC_USER_FIELDS: &str = "username,name,profile_picture_url,biography,is_verified,follower_count,likes_count,quotes_count,replies_count,reposts_count,views_count";
 
 /// Field set for container status queries.
 pub const CONTAINER_STATUS_FIELDS: &str = "id,status,error_message";

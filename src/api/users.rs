@@ -194,10 +194,7 @@ impl Client {
     // ---- Convenience methods using `me` ----
 
     /// Get the authenticated user's posts.
-    pub async fn get_my_posts(
-        &self,
-        opts: Option<&PostsOptions>,
-    ) -> crate::Result<PostsResponse> {
+    pub async fn get_my_posts(&self, opts: Option<&PostsOptions>) -> crate::Result<PostsResponse> {
         let uid = self.user_id().await;
         if uid.is_empty() {
             return Err(error::new_authentication_error(
