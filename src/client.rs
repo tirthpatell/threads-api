@@ -78,7 +78,7 @@ impl Config {
             http_timeout: DEFAULT_HTTP_TIMEOUT,
             retry_config: RetryConfig::default(),
             base_url: BASE_API_URL.to_owned(),
-            user_agent: format!("threads-api-rust/{}", VERSION),
+            user_agent: format!("threads-rs/{}", VERSION),
             debug: false,
         }
     }
@@ -165,7 +165,7 @@ impl Config {
             self.base_url = BASE_API_URL.to_owned();
         }
         if self.user_agent.is_empty() {
-            self.user_agent = format!("threads-api-rust/{}", VERSION);
+            self.user_agent = format!("threads-rs/{}", VERSION);
         }
     }
 

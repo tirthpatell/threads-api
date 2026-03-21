@@ -1,4 +1,4 @@
-# threads-api
+# threads-rs
 
 Rust client library for the [Meta Threads API](https://developers.facebook.com/docs/threads).
 
@@ -24,17 +24,17 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-threads-api = { git = "https://github.com/tirthpatell/threads-api" }
+threads-rs = { git = "https://github.com/tirthpatell/threads-api" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 ## Quick start
 
 ```rust,no_run
-use threads_api::client::{Config, Client};
+use threads_rs::client::{Config, Client};
 
 #[tokio::main]
-async fn main() -> threads_api::Result<()> {
+async fn main() -> threads_rs::Result<()> {
     let config = Config::new("client-id", "client-secret", "https://example.com/cb");
     let client = Client::with_token(config, "YOUR_ACCESS_TOKEN").await?;
 
@@ -50,9 +50,9 @@ async fn main() -> threads_api::Result<()> {
 The library supports the full Threads OAuth 2.0 flow:
 
 ```rust,no_run
-use threads_api::client::{Config, Client};
+use threads_rs::client::{Config, Client};
 
-# async fn run() -> threads_api::Result<()> {
+# async fn run() -> threads_rs::Result<()> {
 let config = Config::new("client-id", "client-secret", "https://example.com/cb");
 let client = Client::new(config).await?;
 
@@ -75,9 +75,9 @@ client.refresh_token().await?;
 You can also create a client from environment variables:
 
 ```rust,no_run
-# async fn run() -> threads_api::Result<()> {
+# async fn run() -> threads_rs::Result<()> {
 // Reads THREADS_CLIENT_ID, THREADS_CLIENT_SECRET, THREADS_REDIRECT_URI
-let client = threads_api::client::Client::from_env().await?;
+let client = threads_rs::client::Client::from_env().await?;
 # Ok(())
 # }
 ```
@@ -148,11 +148,11 @@ let client = threads_api::client::Client::from_env().await?;
 Built-in iterators for paginated endpoints:
 
 ```rust,no_run
-use threads_api::client::{Config, Client};
-use threads_api::pagination::PostIterator;
-use threads_api::types::ids::UserId;
+use threads_rs::client::{Config, Client};
+use threads_rs::pagination::PostIterator;
+use threads_rs::types::ids::UserId;
 
-# async fn run() -> threads_api::Result<()> {
+# async fn run() -> threads_rs::Result<()> {
 # let config = Config::new("id", "secret", "https://example.com/cb");
 # let client = Client::with_token(config, "TOKEN").await?;
 let user_id = UserId::from("me");
@@ -174,7 +174,7 @@ while let Some(page) = iter.next().await? {
 All fields on `Config` are public and can be customized:
 
 ```rust
-use threads_api::client::Config;
+use threads_rs::client::Config;
 use std::time::Duration;
 
 let mut config = Config::new("client-id", "client-secret", "https://example.com/cb");
@@ -197,13 +197,13 @@ Environment variable configuration is also supported via `Config::from_env()`:
 
 ## Error handling
 
-All API methods return `threads_api::Result<T>`. Errors are strongly typed:
+All API methods return `threads_rs::Result<T>`. Errors are strongly typed:
 
 ```rust,no_run
-use threads_api::Error;
+use threads_rs::Error;
 
-# async fn run(client: &threads_api::client::Client) {
-# let post_id = threads_api::types::ids::PostId::from("123");
+# async fn run(client: &threads_rs::client::Client) {
+# let post_id = threads_rs::types::ids::PostId::from("123");
 match client.get_post(&post_id).await {
     Ok(post) => println!("{:?}", post),
     Err(Error::Authentication { message, .. }) => eprintln!("Auth failed: {message}"),

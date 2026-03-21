@@ -14,9 +14,9 @@
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use threads_api::client::{Config, Client};
+//! use threads_rs::client::{Config, Client};
 //!
-//! # async fn run() -> threads_api::Result<()> {
+//! # async fn run() -> threads_rs::Result<()> {
 //! let config = Config::new("client-id", "client-secret", "https://example.com/cb");
 //! let client = Client::with_token(config, "ACCESS_TOKEN").await?;
 //!

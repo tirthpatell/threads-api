@@ -1317,7 +1317,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "threads-api"
+name = "threads-rs"
 version = "0.1.0"
 dependencies = [
  "base64",

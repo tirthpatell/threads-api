@@ -138,7 +138,7 @@ impl HttpClient {
     ) -> crate::Result<Self> {
         let ua = user_agent
             .map(|s| s.to_owned())
-            .unwrap_or_else(|| format!("threads-api-rust/{}", VERSION));
+            .unwrap_or_else(|| format!("threads-rs/{}", VERSION));
 
         let client = reqwest::Client::builder().timeout(timeout).build()?;
 
@@ -596,6 +596,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(client.base_url, BASE_API_URL);
-        assert!(client.user_agent.starts_with("threads-api-rust/"));
+        assert!(client.user_agent.starts_with("threads-rs/"));
     }
 }
