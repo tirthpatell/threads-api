@@ -18,8 +18,9 @@ use crate::http::RequestBody;
 pub struct TokenResponse {
     /// The OAuth access token.
     pub access_token: String,
-    /// Token type (usually "bearer").
-    pub token_type: String,
+    /// Token type (usually "bearer"). Not always returned by the API.
+    #[serde(default)]
+    pub token_type: Option<String>,
     /// Token lifetime in seconds.
     pub expires_in: Option<i64>,
     /// App-scoped user ID.
@@ -31,8 +32,9 @@ pub struct TokenResponse {
 pub struct LongLivedTokenResponse {
     /// The long-lived access token.
     pub access_token: String,
-    /// Token type (usually "bearer").
-    pub token_type: String,
+    /// Token type (usually "bearer"). Not always returned by the API.
+    #[serde(default)]
+    pub token_type: Option<String>,
     /// Token lifetime in seconds (typically 5184000 for 60 days).
     pub expires_in: i64,
 }
@@ -193,7 +195,9 @@ impl Client {
 
         let token_info = TokenInfo {
             access_token: token_resp.access_token,
-            token_type: token_resp.token_type,
+            token_type: token_resp
+                .token_type
+                .unwrap_or_else(|| "bearer".to_string()),
             expires_at: Utc::now() + chrono::Duration::seconds(expires_in),
             user_id,
             created_at: Utc::now(),
@@ -236,7 +240,7 @@ impl Client {
 
         let token_info = TokenInfo {
             access_token: long_resp.access_token,
-            token_type: long_resp.token_type,
+            token_type: long_resp.token_type.unwrap_or_else(|| "bearer".to_string()),
             expires_at: Utc::now() + chrono::Duration::seconds(long_resp.expires_in),
             user_id,
             created_at: Utc::now(),
@@ -273,7 +277,7 @@ impl Client {
 
         let token_info = TokenInfo {
             access_token: long_resp.access_token,
-            token_type: long_resp.token_type,
+            token_type: long_resp.token_type.unwrap_or_else(|| "bearer".to_string()),
             expires_at: Utc::now() + chrono::Duration::seconds(long_resp.expires_in),
             user_id,
             created_at: Utc::now(),
@@ -504,7 +508,7 @@ mod tests {
         }"#;
         let resp: TokenResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.access_token, "tok_abc");
-        assert_eq!(resp.token_type, "bearer");
+        assert_eq!(resp.token_type, Some("bearer".to_string()));
         assert_eq!(resp.expires_in, Some(3600));
         assert_eq!(resp.user_id, Some(12345));
     }
