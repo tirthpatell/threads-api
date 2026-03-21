@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::common::{
-    ChildrenData, GifAttachment, MediaType, PollAttachment, PollResult, PostOwner, ReplyControl,
-    TextAttachment, TextEntity,
+    ChildrenData, GifAttachment, HideStatus, MediaType, PollAttachment, PollResult, PostOwner,
+    ReplyAudience, ReplyControl, TextAttachment, TextEntitiesResponse, TextEntity,
 };
 use super::ids::{ContainerId, PostId};
+use super::location::Location;
 use super::pagination::Paging;
 use super::time::ThreadsTime;
 
@@ -66,7 +67,7 @@ pub struct Post {
     pub has_replies: bool,
     /// Reply audience setting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_audience: Option<String>,
+    pub reply_audience: Option<ReplyAudience>,
     /// The quoted post, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quoted_post: Option<Box<Post>>,
@@ -90,7 +91,7 @@ pub struct Post {
     pub is_reply_owned_by_me: bool,
     /// Hide status of the post.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hide_status: Option<String>,
+    pub hide_status: Option<HideStatus>,
     /// Topic tag for the post.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_tag: Option<String>,
@@ -109,6 +110,24 @@ pub struct Post {
     /// Approval status of a pending reply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_approval_status: Option<String>,
+    /// Whether the media is marked as a spoiler.
+    #[serde(default)]
+    pub is_spoiler_media: bool,
+    /// Text entities in the post content.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_entities: Option<TextEntitiesResponse>,
+    /// Long-form text attachment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_attachment: Option<TextAttachment>,
+    /// Allowlisted country codes for geo-gating.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowlisted_country_codes: Option<Vec<String>>,
+    /// Location ID tagged in the post.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location_id: Option<String>,
+    /// Location details tagged in the post.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<Location>,
 }
 
 /// Generic post content base.

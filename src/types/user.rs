@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::common::RecentSearch;
 use super::ids::UserId;
 
 /// A Threads user profile with app-scoped data.
@@ -38,6 +39,12 @@ pub struct User {
     /// Whether the user is verified.
     #[serde(default)]
     pub is_verified: bool,
+    /// Whether the user is eligible for geo-gating.
+    #[serde(default)]
+    pub is_eligible_for_geo_gating: bool,
+    /// Recently searched keywords.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recently_searched_keywords: Option<Vec<RecentSearch>>,
 }
 
 /// A public Threads user profile (via `threads_profile_discovery` scope).

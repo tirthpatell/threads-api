@@ -5,6 +5,35 @@ use crate::constants;
 use crate::error;
 use crate::types::{AccountInsightsOptions, InsightsResponse, PostId, PostInsightsOptions, UserId};
 
+/// Returns available post insight metric names as string slices.
+pub fn get_available_post_insight_metrics() -> Vec<&'static str> {
+    vec!["views", "likes", "replies", "reposts", "quotes", "shares"]
+}
+
+/// Returns available account insight metric names as string slices.
+pub fn get_available_account_insight_metrics() -> Vec<&'static str> {
+    vec![
+        "views",
+        "likes",
+        "replies",
+        "reposts",
+        "quotes",
+        "clicks",
+        "followers_count",
+        "follower_demographics",
+    ]
+}
+
+/// Returns available insight period names as string slices.
+pub fn get_available_insight_periods() -> Vec<&'static str> {
+    vec!["day", "lifetime"]
+}
+
+/// Returns available follower demographics breakdown names as string slices.
+pub fn get_available_follower_demographics_breakdowns() -> Vec<&'static str> {
+    vec!["country", "city", "age", "gender"]
+}
+
 impl Client {
     /// Get insights for a specific post.
     pub async fn get_post_insights(

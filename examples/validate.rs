@@ -495,7 +495,7 @@ async fn wait_container_ready(client: &Client, cid: &ContainerId) {
 
 async fn cleanup(client: &Client, post_id: &PostId) {
     match client.delete_post(post_id).await {
-        Ok(()) => println!("    deleted {post_id}"),
+        Ok(id) => println!("    deleted {id}"),
         Err(e) => println!("    delete {post_id} failed: {e}"),
     }
 }

@@ -59,9 +59,28 @@ pub struct DebugTokenData {
     pub user_id: String,
 }
 
+/// Response from the app access token endpoint.
+#[derive(Debug, Deserialize)]
+pub struct AppAccessTokenResponse {
+    /// The app access token.
+    pub access_token: String,
+    /// Token type (usually "bearer").
+    pub token_type: String,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Build the app access token shorthand string.
+///
+/// Returns `"TH|{client_id}|{client_secret}"` or an empty string if either is empty.
+fn app_access_token_shorthand(client_id: &str, client_secret: &str) -> String {
+    if client_id.is_empty() || client_secret.is_empty() {
+        return String::new();
+    }
+    format!("TH|{client_id}|{client_secret}")
+}
 
 /// Generate a cryptographically-random state parameter (base64url, 32 bytes).
 fn generate_state() -> String {
@@ -102,6 +121,39 @@ impl Client {
             .append_pair("state", &state);
 
         (url.into(), state)
+    }
+
+    /// Get an app access token using client credentials.
+    ///
+    /// This does NOT store the token in the client (matches Go behavior).
+    /// The caller should use the returned token as needed.
+    pub async fn get_app_access_token(&self) -> crate::Result<AppAccessTokenResponse> {
+        let cfg = self.config();
+
+        // SECURITY: The Graph API requires client_secret as a query parameter for
+        // app access token requests (GET /oauth/access_token). This means the secret
+        // appears in server/proxy access logs. Always use HTTPS and ensure log access
+        // is restricted.
+        let mut params = HashMap::new();
+        params.insert("client_id".into(), cfg.client_id.clone());
+        params.insert("client_secret".into(), cfg.client_secret.clone());
+        params.insert("grant_type".into(), "client_credentials".into());
+
+        let resp = self
+            .http_client
+            .get("/oauth/access_token", params, "")
+            .await?;
+
+        resp.json()
+    }
+
+    /// Get an app access token in shorthand format.
+    ///
+    /// Returns `"TH|{client_id}|{client_secret}"` or an empty string if
+    /// `client_id` or `client_secret` are empty.
+    pub fn get_app_access_token_shorthand(&self) -> String {
+        let cfg = self.config();
+        app_access_token_shorthand(&cfg.client_id, &cfg.client_secret)
     }
 
     /// Exchange an authorization code for a short-lived access token.
@@ -556,5 +608,38 @@ mod tests {
         let client = Client::new(test_config()).await.unwrap();
         // No token stored — should error
         assert!(client.load_token_from_storage().await.is_err());
+    }
+
+    #[test]
+    fn test_app_access_token_response_deserialize() {
+        let json = r#"{
+            "access_token": "app_tok_abc",
+            "token_type": "bearer"
+        }"#;
+        let resp: AppAccessTokenResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.access_token, "app_tok_abc");
+        assert_eq!(resp.token_type, "bearer");
+    }
+
+    #[tokio::test]
+    async fn test_get_app_access_token_shorthand() {
+        let client = Client::new(test_config()).await.unwrap();
+        let shorthand = client.get_app_access_token_shorthand();
+        assert_eq!(shorthand, "TH|test-client-id|test-secret");
+    }
+
+    #[test]
+    fn test_app_access_token_shorthand_empty_client_id() {
+        assert_eq!(app_access_token_shorthand("", "secret"), "");
+    }
+
+    #[test]
+    fn test_app_access_token_shorthand_empty_secret() {
+        assert_eq!(app_access_token_shorthand("id", ""), "");
+    }
+
+    #[test]
+    fn test_app_access_token_shorthand_both_empty() {
+        assert_eq!(app_access_token_shorthand("", ""), "");
     }
 }

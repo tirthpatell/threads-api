@@ -109,7 +109,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_limit(opts.limit)?;
+            validation::validate_posts_options(opts)?;
         }
 
         let token = self.access_token().await;
@@ -158,7 +158,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_limit(opts.limit)?;
+            validation::validate_posts_options(opts)?;
         }
 
         let token = self.access_token().await;

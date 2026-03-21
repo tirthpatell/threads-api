@@ -4,11 +4,15 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use crate::constants::{
-    MAX_CAROUSEL_ITEMS, MAX_LINKS, MAX_POSTS_PER_REQUEST, MAX_TEXT_ATTACHMENT_LENGTH,
-    MAX_TEXT_ENTITIES, MAX_TEXT_LENGTH, MIN_CAROUSEL_ITEMS, MIN_SEARCH_TIMESTAMP,
+    MAX_ALT_TEXT_LENGTH, MAX_CAROUSEL_ITEMS, MAX_LINKS, MAX_POLL_OPTION_LENGTH,
+    MAX_POSTS_PER_REQUEST, MAX_TEXT_ATTACHMENT_LENGTH, MAX_TEXT_ENTITIES, MAX_TEXT_LENGTH,
+    MIN_CAROUSEL_ITEMS, MIN_SEARCH_TIMESTAMP,
 };
 use crate::error::new_validation_error;
-use crate::types::{GifAttachment, PaginationOptions, SearchOptions, TextAttachment, TextEntity};
+use crate::types::{
+    GifAttachment, PaginationOptions, PollAttachment, PostsOptions, SearchOptions, TextAttachment,
+    TextEntity,
+};
 
 /// Regex matching HTTP(S) URLs.
 static URL_REGEX: LazyLock<Regex> =
@@ -271,7 +275,7 @@ pub fn validate_pagination_options(opts: &PaginationOptions) -> crate::Result<()
     Ok(())
 }
 
-/// Validate search options: limit and since timestamp constraints.
+/// Validate search options: limit, since timestamp, and since <= until ordering.
 pub fn validate_search_options(opts: &SearchOptions) -> crate::Result<()> {
     if let Some(limit) = opts.limit {
         if limit > MAX_POSTS_PER_REQUEST {
@@ -292,6 +296,137 @@ pub fn validate_search_options(opts: &SearchOptions) -> crate::Result<()> {
                     "since timestamp {since} is before the minimum allowed ({MIN_SEARCH_TIMESTAMP})"
                 ),
                 "since timestamp too early",
+                "since",
+            ));
+        }
+    }
+
+    if let (Some(since), Some(until)) = (opts.since, opts.until) {
+        if since > until {
+            return Err(new_validation_error(
+                400,
+                &format!("since ({since}) must be <= until ({until})"),
+                "since after until",
+                "since",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate alt text length.
+pub fn validate_alt_text(alt_text: &str) -> crate::Result<()> {
+    if alt_text.is_empty() {
+        return Ok(());
+    }
+    let count = alt_text.chars().count();
+    if count > MAX_ALT_TEXT_LENGTH {
+        return Err(new_validation_error(
+            400,
+            &format!(
+                "alt text exceeds maximum length of {MAX_ALT_TEXT_LENGTH} characters (got {count})"
+            ),
+            "alt text too long",
+            "alt_text",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate poll attachment options.
+pub fn validate_poll_attachment(poll: &PollAttachment) -> crate::Result<()> {
+    if poll.option_a.trim().is_empty() {
+        return Err(new_validation_error(
+            400,
+            "poll option_a must not be empty or whitespace",
+            "empty poll option",
+            "poll_attachment.option_a",
+        ));
+    }
+    if poll.option_b.trim().is_empty() {
+        return Err(new_validation_error(
+            400,
+            "poll option_b must not be empty or whitespace",
+            "empty poll option",
+            "poll_attachment.option_b",
+        ));
+    }
+
+    // option_d requires option_c
+    if poll.option_d.is_some() && poll.option_c.is_none() {
+        return Err(new_validation_error(
+            400,
+            "poll option_d requires option_c to be set",
+            "option_d without option_c",
+            "poll_attachment.option_d",
+        ));
+    }
+
+    // Validate lengths
+    if poll.option_a.chars().count() > MAX_POLL_OPTION_LENGTH {
+        return Err(new_validation_error(
+            400,
+            &format!("poll option_a exceeds maximum length of {MAX_POLL_OPTION_LENGTH} characters"),
+            "poll option too long",
+            "poll_attachment.option_a",
+        ));
+    }
+    if poll.option_b.chars().count() > MAX_POLL_OPTION_LENGTH {
+        return Err(new_validation_error(
+            400,
+            &format!("poll option_b exceeds maximum length of {MAX_POLL_OPTION_LENGTH} characters"),
+            "poll option too long",
+            "poll_attachment.option_b",
+        ));
+    }
+    if let Some(ref c) = poll.option_c {
+        if c.chars().count() > MAX_POLL_OPTION_LENGTH {
+            return Err(new_validation_error(
+                400,
+                &format!(
+                    "poll option_c exceeds maximum length of {MAX_POLL_OPTION_LENGTH} characters"
+                ),
+                "poll option too long",
+                "poll_attachment.option_c",
+            ));
+        }
+    }
+    if let Some(ref d) = poll.option_d {
+        if d.chars().count() > MAX_POLL_OPTION_LENGTH {
+            return Err(new_validation_error(
+                400,
+                &format!(
+                    "poll option_d exceeds maximum length of {MAX_POLL_OPTION_LENGTH} characters"
+                ),
+                "poll option too long",
+                "poll_attachment.option_d",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate posts options: limit and since <= until ordering.
+pub fn validate_posts_options(opts: &PostsOptions) -> crate::Result<()> {
+    if let Some(limit) = opts.limit {
+        if limit > MAX_POSTS_PER_REQUEST {
+            return Err(new_validation_error(
+                400,
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
+                "limit too large",
+                "limit",
+            ));
+        }
+    }
+
+    if let (Some(since), Some(until)) = (opts.since, opts.until) {
+        if since > until {
+            return Err(new_validation_error(
+                400,
+                &format!("since ({since}) must be <= until ({until})"),
+                "since after until",
                 "since",
             ));
         }
@@ -323,7 +458,7 @@ pub fn validate_gif_attachment(attachment: &GifAttachment) -> crate::Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{GifProvider, TextStylingInfo};
+    use crate::types::{GifProvider, PostsOptions, TextStylingInfo};
 
     // --- validate_text_length ---
 
@@ -679,5 +814,159 @@ mod tests {
             provider: GifProvider::Giphy,
         };
         assert!(validate_gif_attachment(&att).is_err());
+    }
+
+    // --- validate_alt_text ---
+
+    #[test]
+    fn alt_text_ok() {
+        assert!(validate_alt_text("A nice photo").is_ok());
+    }
+
+    #[test]
+    fn alt_text_empty_ok() {
+        assert!(validate_alt_text("").is_ok());
+    }
+
+    #[test]
+    fn alt_text_exact_limit() {
+        let s: String = "a".repeat(MAX_ALT_TEXT_LENGTH);
+        assert!(validate_alt_text(&s).is_ok());
+    }
+
+    #[test]
+    fn alt_text_exceeds() {
+        let s: String = "a".repeat(MAX_ALT_TEXT_LENGTH + 1);
+        assert!(validate_alt_text(&s).is_err());
+    }
+
+    // --- validate_poll_attachment ---
+
+    #[test]
+    fn poll_ok_two_options() {
+        let poll = PollAttachment {
+            option_a: "Yes".into(),
+            option_b: "No".into(),
+            option_c: None,
+            option_d: None,
+        };
+        assert!(validate_poll_attachment(&poll).is_ok());
+    }
+
+    #[test]
+    fn poll_ok_four_options() {
+        let poll = PollAttachment {
+            option_a: "A".into(),
+            option_b: "B".into(),
+            option_c: Some("C".into()),
+            option_d: Some("D".into()),
+        };
+        assert!(validate_poll_attachment(&poll).is_ok());
+    }
+
+    #[test]
+    fn poll_empty_option_a() {
+        let poll = PollAttachment {
+            option_a: "".into(),
+            option_b: "No".into(),
+            option_c: None,
+            option_d: None,
+        };
+        assert!(validate_poll_attachment(&poll).is_err());
+    }
+
+    #[test]
+    fn poll_whitespace_option_b() {
+        let poll = PollAttachment {
+            option_a: "Yes".into(),
+            option_b: "   ".into(),
+            option_c: None,
+            option_d: None,
+        };
+        assert!(validate_poll_attachment(&poll).is_err());
+    }
+
+    #[test]
+    fn poll_d_without_c() {
+        let poll = PollAttachment {
+            option_a: "Yes".into(),
+            option_b: "No".into(),
+            option_c: None,
+            option_d: Some("D".into()),
+        };
+        assert!(validate_poll_attachment(&poll).is_err());
+    }
+
+    #[test]
+    fn poll_option_too_long() {
+        let poll = PollAttachment {
+            option_a: "a".repeat(MAX_POLL_OPTION_LENGTH + 1),
+            option_b: "No".into(),
+            option_c: None,
+            option_d: None,
+        };
+        assert!(validate_poll_attachment(&poll).is_err());
+    }
+
+    // --- validate_search_options since <= until ---
+
+    #[test]
+    fn search_since_after_until() {
+        let opts = SearchOptions {
+            since: Some(MIN_SEARCH_TIMESTAMP + 200),
+            until: Some(MIN_SEARCH_TIMESTAMP + 100),
+            ..Default::default()
+        };
+        assert!(validate_search_options(&opts).is_err());
+    }
+
+    #[test]
+    fn search_since_equals_until() {
+        let opts = SearchOptions {
+            since: Some(MIN_SEARCH_TIMESTAMP + 100),
+            until: Some(MIN_SEARCH_TIMESTAMP + 100),
+            ..Default::default()
+        };
+        assert!(validate_search_options(&opts).is_ok());
+    }
+
+    // --- validate_posts_options ---
+
+    #[test]
+    fn posts_options_ok() {
+        let opts = PostsOptions {
+            limit: Some(50),
+            ..Default::default()
+        };
+        assert!(validate_posts_options(&opts).is_ok());
+    }
+
+    #[test]
+    fn posts_options_limit_exceeds() {
+        let opts = PostsOptions {
+            limit: Some(MAX_POSTS_PER_REQUEST + 1),
+            ..Default::default()
+        };
+        assert!(validate_posts_options(&opts).is_err());
+    }
+
+    #[test]
+    fn posts_options_since_after_until() {
+        let opts = PostsOptions {
+            since: Some(2000),
+            until: Some(1000),
+            ..Default::default()
+        };
+        assert!(validate_posts_options(&opts).is_err());
+    }
+
+    #[test]
+    fn posts_options_since_equals_until() {
+        let opts = PostsOptions {
+            since: Some(1000),
+            until: Some(1000),
+            ..Default::default()
+        };
+        assert!(validate_posts_options(&opts).is_ok());
     }
 }

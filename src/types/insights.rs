@@ -217,6 +217,9 @@ pub struct Value {
 pub struct TotalValue {
     /// The aggregated value.
     pub value: i64,
+    /// Link URL associated with this metric value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link_url: Option<String>,
 }
 
 #[cfg(test)]
@@ -285,5 +288,21 @@ mod tests {
         let opts = AccountInsightsOptions::default();
         assert!(opts.metrics.is_none());
         assert!(opts.breakdown.is_none());
+    }
+
+    #[test]
+    fn test_total_value_with_link_url() {
+        let json = r#"{"value": 42, "link_url": "https://example.com"}"#;
+        let tv: TotalValue = serde_json::from_str(json).unwrap();
+        assert_eq!(tv.value, 42);
+        assert_eq!(tv.link_url.as_deref(), Some("https://example.com"));
+    }
+
+    #[test]
+    fn test_total_value_without_link_url() {
+        let json = r#"{"value": 42}"#;
+        let tv: TotalValue = serde_json::from_str(json).unwrap();
+        assert_eq!(tv.value, 42);
+        assert!(tv.link_url.is_none());
     }
 }

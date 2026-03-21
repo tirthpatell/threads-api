@@ -67,6 +67,51 @@ pub enum GifProvider {
     Giphy,
 }
 
+/// Reply audience setting returned by the API (UPPERCASE values).
+///
+/// This is the read-side counterpart to [`ReplyControl`] which uses lowercase values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReplyAudience {
+    /// Anyone can reply.
+    #[serde(rename = "EVERYONE")]
+    Everyone,
+    /// Only accounts the poster follows can reply.
+    #[serde(rename = "ACCOUNTS_YOU_FOLLOW")]
+    AccountsYouFollow,
+    /// Only mentioned accounts can reply.
+    #[serde(rename = "MENTIONED_ONLY")]
+    MentionedOnly,
+    /// Only the parent post author can reply.
+    #[serde(rename = "PARENT_POST_AUTHOR_ONLY")]
+    ParentPostAuthorOnly,
+    /// Only followers can reply.
+    #[serde(rename = "FOLLOWERS_ONLY")]
+    FollowersOnly,
+}
+
+/// Visibility/moderation status of a post.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HideStatus {
+    /// Post is not hushed.
+    #[serde(rename = "NOT_HUSHED")]
+    NotHushed,
+    /// Post was unhushed.
+    #[serde(rename = "UNHUSHED")]
+    Unhushed,
+    /// Post is hidden.
+    #[serde(rename = "HIDDEN")]
+    Hidden,
+    /// Post is covered.
+    #[serde(rename = "COVERED")]
+    Covered,
+    /// Post is blocked.
+    #[serde(rename = "BLOCKED")]
+    Blocked,
+    /// Post is restricted.
+    #[serde(rename = "RESTRICTED")]
+    Restricted,
+}
+
 /// Media type for posts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaType {
@@ -79,6 +124,9 @@ pub enum MediaType {
     /// Single video post.
     #[serde(rename = "VIDEO")]
     Video,
+    /// Audio post.
+    #[serde(rename = "AUDIO")]
+    Audio,
     /// Carousel post (multiple media items).
     #[serde(rename = "CAROUSEL")]
     Carousel,
@@ -88,6 +136,9 @@ pub enum MediaType {
     /// Repost facade.
     #[serde(rename = "REPOST_FACADE")]
     RepostFacade,
+    /// Text post (response-only media type from API).
+    #[serde(rename = "TEXT_POST")]
+    TextPost,
 }
 
 /// Poll options when creating a post with a poll.
@@ -227,6 +278,22 @@ pub struct QuotaConfig {
     pub quota_duration: i64,
 }
 
+/// Response wrapper for text entities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEntitiesResponse {
+    /// List of text entities.
+    pub data: Vec<TextEntity>,
+}
+
+/// A recently searched keyword with timestamp.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentSearch {
+    /// The search query string.
+    pub query: String,
+    /// Unix timestamp of when the search was performed.
+    pub timestamp: i64,
+}
+
 /// Current API quota usage and limits.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublishingLimits {
@@ -246,6 +313,12 @@ pub struct PublishingLimits {
     pub location_search_quota_usage: i64,
     /// Location search quota config.
     pub location_search_config: QuotaConfig,
+    /// Search quota used.
+    #[serde(default)]
+    pub search_quota_usage: i64,
+    /// Search quota config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search_config: Option<QuotaConfig>,
 }
 
 #[cfg(test)]
@@ -310,6 +383,105 @@ mod tests {
         assert!(!json.contains("option_c"));
         let back: PollAttachment = serde_json::from_str(&json).unwrap();
         assert_eq!(back.option_a, "Yes");
+    }
+
+    #[test]
+    fn test_reply_audience_serde() {
+        let ra = ReplyAudience::AccountsYouFollow;
+        let json = serde_json::to_string(&ra).unwrap();
+        assert_eq!(json, r#""ACCOUNTS_YOU_FOLLOW""#);
+        let back: ReplyAudience = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ReplyAudience::AccountsYouFollow);
+    }
+
+    #[test]
+    fn test_hide_status_serde() {
+        let hs = HideStatus::Hidden;
+        let json = serde_json::to_string(&hs).unwrap();
+        assert_eq!(json, r#""HIDDEN""#);
+        let back: HideStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, HideStatus::Hidden);
+    }
+
+    #[test]
+    fn test_media_type_audio_serde() {
+        let mt = MediaType::Audio;
+        let json = serde_json::to_string(&mt).unwrap();
+        assert_eq!(json, r#""AUDIO""#);
+        let back: MediaType = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, MediaType::Audio);
+    }
+
+    #[test]
+    fn test_media_type_text_post_serde() {
+        let mt = MediaType::TextPost;
+        let json = serde_json::to_string(&mt).unwrap();
+        assert_eq!(json, r#""TEXT_POST""#);
+        let back: MediaType = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, MediaType::TextPost);
+    }
+
+    #[test]
+    fn test_text_entities_response_serde() {
+        let resp = TextEntitiesResponse {
+            data: vec![TextEntity {
+                entity_type: "SPOILER".into(),
+                offset: 0,
+                length: 5,
+            }],
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let back: TextEntitiesResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.data.len(), 1);
+        assert_eq!(back.data[0].entity_type, "SPOILER");
+    }
+
+    #[test]
+    fn test_recent_search_serde() {
+        let rs = RecentSearch {
+            query: "rust".into(),
+            timestamp: 1700000000,
+        };
+        let json = serde_json::to_string(&rs).unwrap();
+        let back: RecentSearch = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.query, "rust");
+        assert_eq!(back.timestamp, 1700000000);
+    }
+
+    #[test]
+    fn test_publishing_limits_with_search_fields() {
+        let json = r#"{
+            "quota_usage": 10,
+            "config": {"quota_total": 100, "quota_duration": 86400},
+            "reply_quota_usage": 5,
+            "reply_config": {"quota_total": 50, "quota_duration": 86400},
+            "delete_quota_usage": 2,
+            "delete_config": {"quota_total": 25, "quota_duration": 86400},
+            "location_search_quota_usage": 1,
+            "location_search_config": {"quota_total": 10, "quota_duration": 86400},
+            "search_quota_usage": 3,
+            "search_config": {"quota_total": 30, "quota_duration": 86400}
+        }"#;
+        let limits: PublishingLimits = serde_json::from_str(json).unwrap();
+        assert_eq!(limits.search_quota_usage, 3);
+        assert_eq!(limits.search_config.unwrap().quota_total, 30);
+    }
+
+    #[test]
+    fn test_publishing_limits_without_search_fields() {
+        let json = r#"{
+            "quota_usage": 10,
+            "config": {"quota_total": 100, "quota_duration": 86400},
+            "reply_quota_usage": 5,
+            "reply_config": {"quota_total": 50, "quota_duration": 86400},
+            "delete_quota_usage": 2,
+            "delete_config": {"quota_total": 25, "quota_duration": 86400},
+            "location_search_quota_usage": 1,
+            "location_search_config": {"quota_total": 10, "quota_duration": 86400}
+        }"#;
+        let limits: PublishingLimits = serde_json::from_str(json).unwrap();
+        assert_eq!(limits.search_quota_usage, 0);
+        assert!(limits.search_config.is_none());
     }
 
     #[test]
