@@ -13,20 +13,12 @@ pub struct User {
     /// Display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Profile picture URL. Maps to `threads_profile_picture_url` in the API.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        rename = "threads_profile_picture_url"
-    )]
-    pub profile_pic_url: Option<String>,
-    /// Biography. Maps to `threads_biography` in the API.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        rename = "threads_biography"
-    )]
-    pub biography: Option<String>,
+    /// Profile picture URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threads_profile_picture_url: Option<String>,
+    /// Biography.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threads_biography: Option<String>,
     /// Website URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub website: Option<String>,
