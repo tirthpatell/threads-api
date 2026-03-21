@@ -290,7 +290,7 @@ pub struct TextEntitiesResponse {
 pub struct RecentSearch {
     /// The search query string.
     pub query: String,
-    /// Unix timestamp of when the search was performed.
+    /// Timestamp of when the search was performed, in **milliseconds** since Unix epoch.
     pub timestamp: i64,
 }
 
@@ -313,12 +313,6 @@ pub struct PublishingLimits {
     pub location_search_quota_usage: i64,
     /// Location search quota config.
     pub location_search_config: QuotaConfig,
-    /// Search quota used.
-    #[serde(default)]
-    pub search_quota_usage: i64,
-    /// Search quota config.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub search_config: Option<QuotaConfig>,
 }
 
 #[cfg(test)]
@@ -449,26 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn test_publishing_limits_with_search_fields() {
-        let json = r#"{
-            "quota_usage": 10,
-            "config": {"quota_total": 100, "quota_duration": 86400},
-            "reply_quota_usage": 5,
-            "reply_config": {"quota_total": 50, "quota_duration": 86400},
-            "delete_quota_usage": 2,
-            "delete_config": {"quota_total": 25, "quota_duration": 86400},
-            "location_search_quota_usage": 1,
-            "location_search_config": {"quota_total": 10, "quota_duration": 86400},
-            "search_quota_usage": 3,
-            "search_config": {"quota_total": 30, "quota_duration": 86400}
-        }"#;
-        let limits: PublishingLimits = serde_json::from_str(json).unwrap();
-        assert_eq!(limits.search_quota_usage, 3);
-        assert_eq!(limits.search_config.unwrap().quota_total, 30);
-    }
-
-    #[test]
-    fn test_publishing_limits_without_search_fields() {
+    fn test_publishing_limits_deserialize() {
         let json = r#"{
             "quota_usage": 10,
             "config": {"quota_total": 100, "quota_duration": 86400},
@@ -480,8 +455,8 @@ mod tests {
             "location_search_config": {"quota_total": 10, "quota_duration": 86400}
         }"#;
         let limits: PublishingLimits = serde_json::from_str(json).unwrap();
-        assert_eq!(limits.search_quota_usage, 0);
-        assert!(limits.search_config.is_none());
+        assert_eq!(limits.quota_usage, 10);
+        assert_eq!(limits.location_search_quota_usage, 1);
     }
 
     #[test]

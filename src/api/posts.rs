@@ -66,16 +66,18 @@ impl Client {
         }
 
         if content.auto_publish_text {
-            // Text containers are ready immediately — skip polling
+            // auto_publish_text: API publishes during container creation — no
+            // separate publish call needed. The container creation response
+            // already contains the media ID.
             let params = self.build_text_params(content, &user_id);
             let container_id = self.create_container(params).await?;
-            return self.publish_container(&container_id).await;
+            let post_id = PostId::from(container_id.as_str());
+            return self.get_post(&post_id).await;
         }
 
+        // Text containers are ready immediately — skip polling
         let params = self.build_text_params(content, &user_id);
         let container_id = self.create_container(params).await?;
-        let cid = ContainerId::from(container_id.as_str());
-        self.wait_for_container_ready(&cid).await?;
         self.publish_container(&container_id).await
     }
 
@@ -272,6 +274,7 @@ impl Client {
 
         let mut params = HashMap::new();
         params.insert("media_type".into(), media_type.to_owned());
+        params.insert("is_carousel_item".into(), "true".into());
 
         let url_key = match media_type {
             "VIDEO" => "video_url",
@@ -287,8 +290,12 @@ impl Client {
         Ok(ContainerId::from(id.as_str()))
     }
 
-    /// Repost an existing post.
-    pub async fn repost_post(&self, post_id: &PostId) -> crate::Result<Post> {
+    /// Repost an existing post and return the repost's post ID.
+    ///
+    /// Unlike the previous implementation, this does **not** make an extra
+    /// API call to fetch the full post. Call `get_post` on the returned ID
+    /// if you need the full post details.
+    pub async fn repost_post(&self, post_id: &PostId) -> crate::Result<PostId> {
         if !post_id.is_valid() {
             return Err(error::new_validation_error(
                 0,
@@ -307,7 +314,6 @@ impl Client {
             ));
         }
 
-        // Use the direct repost endpoint
         let path = format!("/{}/repost", post_id);
         let resp = self.http_client.post(&path, None, &token).await?;
 
@@ -317,8 +323,7 @@ impl Client {
         }
 
         let repost_resp: RepostResponse = resp.json()?;
-        let repost_id = PostId::from(repost_resp.id.as_str());
-        self.get_post(&repost_id).await
+        Ok(PostId::from(repost_resp.id.as_str()))
     }
 
     /// Get the status of a media container.
@@ -459,6 +464,9 @@ impl Client {
         }
         if let Some(ref qp) = content.quoted_post_id {
             params.insert("quote_post_id".into(), qp.to_string());
+        }
+        if content.auto_publish_text {
+            params.insert("auto_publish_text".into(), "true".into());
         }
         if content.is_ghost_post {
             params.insert("is_ghost_post".into(), "true".into());

@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
-use crate::types::{PostsOptions, PostsResponse, PublicUser, RepliesResponse, User, UserId};
+use crate::types::{
+    PostsOptions, PostsResponse, PublicUser, RecentSearch, RepliesResponse, User, UserId,
+};
 use crate::validation;
 
 impl Client {
@@ -55,6 +57,7 @@ impl Client {
         let token = self.access_token().await;
         let mut params = HashMap::new();
         params.insert("username".into(), username.to_owned());
+        params.insert("fields".into(), constants::PUBLIC_USER_FIELDS.into());
 
         let resp = self
             .http_client
@@ -137,7 +140,7 @@ impl Client {
 
         let resp = self
             .http_client
-            .get("/public_profile_posts", params, &token)
+            .get("/profile_posts", params, &token)
             .await?;
         resp.json()
     }
@@ -186,5 +189,89 @@ impl Client {
         let path = format!("/{}/replies", user_id);
         let resp = self.http_client.get(&path, params, &token).await?;
         resp.json()
+    }
+
+    // ---- Convenience methods using `me` ----
+
+    /// Get the authenticated user's posts.
+    pub async fn get_my_posts(&self, opts: Option<&PostsOptions>) -> crate::Result<PostsResponse> {
+        let uid = self.user_id().await;
+        if uid.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+        let user_id = UserId::from(uid);
+        self.get_user_posts(&user_id, opts).await
+    }
+
+    /// Get the authenticated user's replies.
+    pub async fn get_my_replies(
+        &self,
+        opts: Option<&PostsOptions>,
+    ) -> crate::Result<RepliesResponse> {
+        let uid = self.user_id().await;
+        if uid.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+        let user_id = UserId::from(uid);
+        self.get_user_replies(&user_id, opts).await
+    }
+
+    /// Get posts where the authenticated user is mentioned.
+    pub async fn get_my_mentions(
+        &self,
+        opts: Option<&PostsOptions>,
+    ) -> crate::Result<PostsResponse> {
+        let uid = self.user_id().await;
+        if uid.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+        let user_id = UserId::from(uid);
+        self.get_user_mentions(&user_id, opts).await
+    }
+
+    /// Get the authenticated user's ghost posts.
+    pub async fn get_my_ghost_posts(
+        &self,
+        opts: Option<&PostsOptions>,
+    ) -> crate::Result<PostsResponse> {
+        let uid = self.user_id().await;
+        if uid.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+        let user_id = UserId::from(uid);
+        self.get_user_ghost_posts(&user_id, opts).await
+    }
+
+    /// Get the authenticated user's recently searched keywords.
+    pub async fn get_recently_searched_keywords(&self) -> crate::Result<Vec<RecentSearch>> {
+        let uid = self.user_id().await;
+        if uid.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                constants::ERR_EMPTY_USER_ID,
+                "No user ID available from token",
+            ));
+        }
+        let user_id = UserId::from(uid);
+        let user = self
+            .get_user_with_fields(&user_id, &["recently_searched_keywords"])
+            .await?;
+        Ok(user.recently_searched_keywords.unwrap_or_default())
     }
 }

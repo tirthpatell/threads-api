@@ -6,12 +6,12 @@ use regex::Regex;
 use crate::constants::{
     MAX_ALT_TEXT_LENGTH, MAX_CAROUSEL_ITEMS, MAX_LINKS, MAX_POLL_OPTION_LENGTH,
     MAX_POSTS_PER_REQUEST, MAX_TEXT_ATTACHMENT_LENGTH, MAX_TEXT_ENTITIES, MAX_TEXT_LENGTH,
-    MIN_CAROUSEL_ITEMS, MIN_SEARCH_TIMESTAMP,
+    MAX_TOPIC_TAG_LENGTH, MIN_CAROUSEL_ITEMS, MIN_SEARCH_TIMESTAMP,
 };
 use crate::error::new_validation_error;
 use crate::types::{
-    GifAttachment, PaginationOptions, PollAttachment, PostsOptions, SearchOptions, TextAttachment,
-    TextEntity,
+    GifAttachment, PaginationOptions, PendingRepliesOptions, PollAttachment, PostsOptions,
+    RepliesOptions, SearchOptions, TextAttachment, TextEntity,
 };
 
 /// Regex matching HTTP(S) URLs.
@@ -35,9 +35,13 @@ pub fn validate_limit(limit: Option<usize>) -> crate::Result<()> {
     Ok(())
 }
 
-/// Validate that `text` does not exceed `MAX_TEXT_LENGTH` unicode characters.
+/// Validate that `text` does not exceed `MAX_TEXT_LENGTH` characters.
+///
+/// Per the API docs, non-ASCII characters (emojis, CJK, accented Latin, etc.)
+/// are counted by their UTF-8 byte length rather than as single characters.
+/// ASCII characters count as 1 each.
 pub fn validate_text_length(text: &str, field_name: &str) -> crate::Result<()> {
-    let count = text.chars().count();
+    let count = text_length_with_emoji_bytes(text);
     if count > MAX_TEXT_LENGTH {
         return Err(new_validation_error(
             400,
@@ -49,6 +53,22 @@ pub fn validate_text_length(text: &str, field_name: &str) -> crate::Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Count text length where non-ASCII characters are counted by their UTF-8
+/// byte length and ASCII characters count as 1.
+fn text_length_with_emoji_bytes(text: &str) -> usize {
+    text.chars()
+        .map(|c| {
+            if c.len_utf8() > 1 {
+                // Non-ASCII characters (emojis, CJK, accented Latin, etc.)
+                // count as their UTF-8 byte length
+                c.len_utf8()
+            } else {
+                1
+            }
+        })
+        .sum()
 }
 
 /// Validate that the combined unique link count from `text` and
@@ -192,8 +212,27 @@ pub fn validate_media_url(url: &str, media_type: &str) -> crate::Result<()> {
     Ok(())
 }
 
-/// Validate a topic tag: must not contain periods (`.`) or ampersands (`&`).
+/// Validate a topic tag: must be 1-50 characters and not contain periods (`.`) or ampersands (`&`).
 pub fn validate_topic_tag(tag: &str) -> crate::Result<()> {
+    let len = tag.chars().count();
+    if len == 0 {
+        return Err(new_validation_error(
+            400,
+            "topic tag must not be empty",
+            "empty topic tag",
+            "topic_tag",
+        ));
+    }
+    if len > MAX_TOPIC_TAG_LENGTH {
+        return Err(new_validation_error(
+            400,
+            &format!(
+                "topic tag exceeds maximum length of {MAX_TOPIC_TAG_LENGTH} characters (got {len})"
+            ),
+            "topic tag too long",
+            "topic_tag",
+        ));
+    }
     if tag.contains('.') {
         return Err(new_validation_error(
             400,
@@ -260,7 +299,8 @@ pub fn validate_carousel_children(count: usize) -> crate::Result<()> {
     Ok(())
 }
 
-/// Validate pagination options: limit must not exceed `MAX_POSTS_PER_REQUEST`.
+/// Validate pagination options: limit must not exceed `MAX_POSTS_PER_REQUEST`,
+/// and `before` and `after` cannot both be set.
 pub fn validate_pagination_options(opts: &PaginationOptions) -> crate::Result<()> {
     if let Some(limit) = opts.limit {
         if limit > MAX_POSTS_PER_REQUEST {
@@ -272,10 +312,64 @@ pub fn validate_pagination_options(opts: &PaginationOptions) -> crate::Result<()
             ));
         }
     }
+    if opts.before.is_some() && opts.after.is_some() {
+        return Err(new_validation_error(
+            400,
+            "before and after cursors cannot both be specified",
+            "conflicting cursors",
+            "before",
+        ));
+    }
     Ok(())
 }
 
-/// Validate search options: limit, since timestamp, and since <= until ordering.
+/// Validate replies options: limit and before/after exclusivity.
+pub fn validate_replies_options(opts: &RepliesOptions) -> crate::Result<()> {
+    if let Some(limit) = opts.limit {
+        if limit > MAX_POSTS_PER_REQUEST {
+            return Err(new_validation_error(
+                400,
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
+                "limit too large",
+                "limit",
+            ));
+        }
+    }
+    if opts.before.is_some() && opts.after.is_some() {
+        return Err(new_validation_error(
+            400,
+            "before and after cursors cannot both be specified",
+            "conflicting cursors",
+            "before",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate pending replies options: limit and before/after exclusivity.
+pub fn validate_pending_replies_options(opts: &PendingRepliesOptions) -> crate::Result<()> {
+    if let Some(limit) = opts.limit {
+        if limit > MAX_POSTS_PER_REQUEST {
+            return Err(new_validation_error(
+                400,
+                &format!("limit {limit} exceeds maximum of {MAX_POSTS_PER_REQUEST}"),
+                "limit too large",
+                "limit",
+            ));
+        }
+    }
+    if opts.before.is_some() && opts.after.is_some() {
+        return Err(new_validation_error(
+            400,
+            "before and after cursors cannot both be specified",
+            "conflicting cursors",
+            "before",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate search options: limit, since timestamp, since <= until ordering, and before/after exclusivity.
 pub fn validate_search_options(opts: &SearchOptions) -> crate::Result<()> {
     if let Some(limit) = opts.limit {
         if limit > MAX_POSTS_PER_REQUEST {
@@ -286,6 +380,15 @@ pub fn validate_search_options(opts: &SearchOptions) -> crate::Result<()> {
                 "limit",
             ));
         }
+    }
+
+    if opts.before.is_some() && opts.after.is_some() {
+        return Err(new_validation_error(
+            400,
+            "before and after cursors cannot both be specified",
+            "conflicting cursors",
+            "before",
+        ));
     }
 
     if let Some(since) = opts.since {
@@ -408,7 +511,7 @@ pub fn validate_poll_attachment(poll: &PollAttachment) -> crate::Result<()> {
     Ok(())
 }
 
-/// Validate posts options: limit and since <= until ordering.
+/// Validate posts options: limit, since <= until ordering, and before/after exclusivity.
 pub fn validate_posts_options(opts: &PostsOptions) -> crate::Result<()> {
     if let Some(limit) = opts.limit {
         if limit > MAX_POSTS_PER_REQUEST {
@@ -419,6 +522,15 @@ pub fn validate_posts_options(opts: &PostsOptions) -> crate::Result<()> {
                 "limit",
             ));
         }
+    }
+
+    if opts.before.is_some() && opts.after.is_some() {
+        return Err(new_validation_error(
+            400,
+            "before and after cursors cannot both be specified",
+            "conflicting cursors",
+            "before",
+        ));
     }
 
     if let (Some(since), Some(until)) = (opts.since, opts.until) {
@@ -481,12 +593,14 @@ mod tests {
     }
 
     #[test]
-    fn text_length_unicode() {
-        // Each emoji is one char but multiple bytes.
-        let s: String = "\u{1F600}".repeat(MAX_TEXT_LENGTH);
+    fn text_length_unicode_emoji_counted_as_bytes() {
+        // \u{1F600} is 4 UTF-8 bytes, so counts as 4 toward the limit.
+        // 125 emojis = 500 byte-equivalents = exactly at the limit.
+        let s: String = "\u{1F600}".repeat(125);
         assert!(validate_text_length(&s, "text").is_ok());
 
-        let s2: String = "\u{1F600}".repeat(MAX_TEXT_LENGTH + 1);
+        // 126 emojis = 504 byte-equivalents > 500 limit.
+        let s2: String = "\u{1F600}".repeat(126);
         assert!(validate_text_length(&s2, "text").is_err());
     }
 
@@ -662,6 +776,23 @@ mod tests {
     #[test]
     fn topic_tag_ampersand() {
         assert!(validate_topic_tag("rust&go").is_err());
+    }
+
+    #[test]
+    fn topic_tag_empty() {
+        assert!(validate_topic_tag("").is_err());
+    }
+
+    #[test]
+    fn topic_tag_exact_max_length() {
+        let tag = "a".repeat(MAX_TOPIC_TAG_LENGTH);
+        assert!(validate_topic_tag(&tag).is_ok());
+    }
+
+    #[test]
+    fn topic_tag_exceeds_max_length() {
+        let tag = "a".repeat(MAX_TOPIC_TAG_LENGTH + 1);
+        assert!(validate_topic_tag(&tag).is_err());
     }
 
     // --- validate_country_codes ---
@@ -968,5 +1099,56 @@ mod tests {
             ..Default::default()
         };
         assert!(validate_posts_options(&opts).is_ok());
+    }
+
+    // --- before/after mutual exclusivity ---
+
+    #[test]
+    fn pagination_before_and_after_rejected() {
+        let opts = PaginationOptions {
+            before: Some("abc".into()),
+            after: Some("def".into()),
+            ..Default::default()
+        };
+        assert!(validate_pagination_options(&opts).is_err());
+    }
+
+    #[test]
+    fn posts_before_and_after_rejected() {
+        let opts = PostsOptions {
+            before: Some("abc".into()),
+            after: Some("def".into()),
+            ..Default::default()
+        };
+        assert!(validate_posts_options(&opts).is_err());
+    }
+
+    #[test]
+    fn search_before_and_after_rejected() {
+        let opts = SearchOptions {
+            before: Some("abc".into()),
+            after: Some("def".into()),
+            ..Default::default()
+        };
+        assert!(validate_search_options(&opts).is_err());
+    }
+
+    // --- text_length_with_emoji_bytes ---
+
+    #[test]
+    fn text_length_ascii_only() {
+        assert_eq!(text_length_with_emoji_bytes("hello"), 5);
+    }
+
+    #[test]
+    fn text_length_emoji_counts_as_bytes() {
+        // Single emoji \u{1F600} is 4 UTF-8 bytes
+        assert_eq!(text_length_with_emoji_bytes("\u{1F600}"), 4);
+    }
+
+    #[test]
+    fn text_length_mixed() {
+        // "hi" (2) + emoji (4) = 6
+        assert_eq!(text_length_with_emoji_bytes("hi\u{1F600}"), 6);
     }
 }

@@ -5,7 +5,8 @@ use crate::constants;
 use crate::error;
 use crate::http::RequestBody;
 use crate::types::{
-    PendingRepliesOptions, Post, PostId, RepliesOptions, RepliesResponse, TextPostContent,
+    ImagePostContent, PendingRepliesOptions, Post, PostId, RepliesOptions, RepliesResponse,
+    TextPostContent, VideoPostContent,
 };
 use crate::validation;
 
@@ -26,7 +27,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_limit(opts.limit)?;
+            validation::validate_replies_options(opts)?;
         }
 
         let token = self.access_token().await;
@@ -69,7 +70,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_limit(opts.limit)?;
+            validation::validate_replies_options(opts)?;
         }
 
         let token = self.access_token().await;
@@ -112,12 +113,12 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_limit(opts.limit)?;
+            validation::validate_pending_replies_options(opts)?;
         }
 
         let token = self.access_token().await;
         let mut params = HashMap::new();
-        params.insert("fields".into(), constants::REPLY_FIELDS.into());
+        params.insert("fields".into(), constants::PENDING_REPLY_FIELDS.into());
 
         if let Some(opts) = opts {
             if let Some(limit) = opts.limit {
@@ -245,12 +246,16 @@ impl Client {
         self.create_text_post(&content).await
     }
 
-    /// Create a reply from a `TextPostContent`.
+    /// Create a text reply.
     ///
-    /// Validates that `reply_to_id` is set, adds a 10-second delay
-    /// (recommended by the Threads API for replies), then delegates
-    /// to `create_text_post`.
-    pub async fn create_reply(&self, content: &TextPostContent) -> crate::Result<Post> {
+    /// Validates that `reply_to_id` is set, then delegates to `create_text_post`.
+    /// Set `apply_reply_delay` to `true` to apply the API-recommended 10-second
+    /// delay before creating the reply.
+    pub async fn create_reply(
+        &self,
+        content: &TextPostContent,
+        apply_reply_delay: bool,
+    ) -> crate::Result<Post> {
         if content.reply_to_id.is_none() {
             return Err(error::new_validation_error(
                 0,
@@ -260,8 +265,42 @@ impl Client {
             ));
         }
 
-        tokio::time::sleep(constants::REPLY_PUBLISH_DELAY).await;
+        if apply_reply_delay {
+            tokio::time::sleep(constants::REPLY_PUBLISH_DELAY).await;
+        }
         self.create_text_post(content).await
+    }
+
+    /// Create an image reply.
+    ///
+    /// Validates that `reply_to_id` is set, then delegates to `create_image_post`.
+    pub async fn create_image_reply(&self, content: &ImagePostContent) -> crate::Result<Post> {
+        if content.reply_to_id.is_none() {
+            return Err(error::new_validation_error(
+                0,
+                "reply_to_id is required for create_image_reply",
+                "",
+                "reply_to_id",
+            ));
+        }
+
+        self.create_image_post(content).await
+    }
+
+    /// Create a video reply.
+    ///
+    /// Validates that `reply_to_id` is set, then delegates to `create_video_post`.
+    pub async fn create_video_reply(&self, content: &VideoPostContent) -> crate::Result<Post> {
+        if content.reply_to_id.is_none() {
+            return Err(error::new_validation_error(
+                0,
+                "reply_to_id is required for create_video_reply",
+                "",
+                "reply_to_id",
+            ));
+        }
+
+        self.create_video_post(content).await
     }
 
     /// Unhide a reply.

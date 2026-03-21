@@ -200,6 +200,12 @@ pub struct Insight {
     /// Aggregated total value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_value: Option<TotalValue>,
+    /// Per-link metric values (returned by the `clicks` account metric).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link_total_values: Option<Vec<LinkTotalValue>>,
+    /// Follower demographics total value with breakdowns.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demographic_total_value: Option<DemographicTotalValue>,
 }
 
 /// A metric value with optional timestamp.
@@ -220,6 +226,41 @@ pub struct TotalValue {
     /// Link URL associated with this metric value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link_url: Option<String>,
+}
+
+/// A per-link metric value returned by the `clicks` account insight metric.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkTotalValue {
+    /// The metric value for this link.
+    pub value: i64,
+    /// The link URL.
+    pub link_url: String,
+}
+
+/// A single demographic result entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemographicResult {
+    /// Values keyed by dimension (e.g. `{"country": "US"}`).
+    #[serde(default)]
+    pub dimension_values: Vec<String>,
+    /// The metric value for this demographic slice.
+    pub value: f64,
+}
+
+/// Breakdown data for follower demographics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemographicBreakdown {
+    /// Dimension keys (e.g. `["country"]`, `["city"]`, `["age"]`, `["gender"]`).
+    pub dimension_keys: Vec<String>,
+    /// Results for each dimension value.
+    pub results: Vec<DemographicResult>,
+}
+
+/// Follower demographics total value with breakdowns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemographicTotalValue {
+    /// Breakdown data for the demographic metric.
+    pub breakdowns: Vec<DemographicBreakdown>,
 }
 
 #[cfg(test)]
@@ -304,5 +345,56 @@ mod tests {
         let tv: TotalValue = serde_json::from_str(json).unwrap();
         assert_eq!(tv.value, 42);
         assert!(tv.link_url.is_none());
+    }
+
+    #[test]
+    fn test_link_total_value_deserialize() {
+        let json = r#"{"value": 11, "link_url": "https://example.com"}"#;
+        let ltv: LinkTotalValue = serde_json::from_str(json).unwrap();
+        assert_eq!(ltv.value, 11);
+        assert_eq!(ltv.link_url, "https://example.com");
+    }
+
+    #[test]
+    fn test_insight_with_link_total_values() {
+        let json = r#"{
+            "name": "clicks",
+            "period": "lifetime",
+            "link_total_values": [
+                {"value": 11, "link_url": "https://example.com"},
+                {"value": 5, "link_url": "https://other.com"}
+            ]
+        }"#;
+        let insight: Insight = serde_json::from_str(json).unwrap();
+        assert_eq!(insight.name, "clicks");
+        let ltv = insight.link_total_values.unwrap();
+        assert_eq!(ltv.len(), 2);
+        assert_eq!(ltv[0].value, 11);
+        assert_eq!(ltv[1].link_url, "https://other.com");
+    }
+
+    #[test]
+    fn test_demographic_breakdown_deserialize() {
+        let json = r#"{
+            "name": "follower_demographics",
+            "period": "lifetime",
+            "demographic_total_value": {
+                "breakdowns": [{
+                    "dimension_keys": ["country"],
+                    "results": [
+                        {"dimension_values": ["US"], "value": 100.0},
+                        {"dimension_values": ["GB"], "value": 50.0}
+                    ]
+                }]
+            }
+        }"#;
+        let insight: Insight = serde_json::from_str(json).unwrap();
+        assert_eq!(insight.name, "follower_demographics");
+        let demo = insight.demographic_total_value.unwrap();
+        assert_eq!(demo.breakdowns.len(), 1);
+        assert_eq!(demo.breakdowns[0].dimension_keys, vec!["country"]);
+        assert_eq!(demo.breakdowns[0].results.len(), 2);
+        assert_eq!(demo.breakdowns[0].results[0].dimension_values, vec!["US"]);
+        assert_eq!(demo.breakdowns[0].results[0].value, 100.0);
     }
 }

@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
-use crate::types::{
-    PaginationOptions, Post, PostId, PostsOptions, PostsResponse, PublishingLimits, UserId,
-};
+use crate::types::{Post, PostId, PostsOptions, PostsResponse, PublishingLimits, UserId};
 use crate::validation;
 
 impl Client {
@@ -76,10 +74,13 @@ impl Client {
     }
 
     /// Get posts where the user is mentioned.
+    ///
+    /// Supports `since` and `until` for time-range filtering in addition to
+    /// cursor-based pagination.
     pub async fn get_user_mentions(
         &self,
         user_id: &UserId,
-        opts: Option<&PaginationOptions>,
+        opts: Option<&PostsOptions>,
     ) -> crate::Result<PostsResponse> {
         if !user_id.is_valid() {
             return Err(error::new_validation_error(
@@ -91,7 +92,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_pagination_options(opts)?;
+            validation::validate_posts_options(opts)?;
         }
 
         let token = self.access_token().await;
@@ -108,6 +109,12 @@ impl Client {
             if let Some(ref after) = opts.after {
                 params.insert("after".into(), after.clone());
             }
+            if let Some(since) = opts.since {
+                params.insert("since".into(), since.to_string());
+            }
+            if let Some(until) = opts.until {
+                params.insert("until".into(), until.to_string());
+            }
         }
 
         let path = format!("/{}/mentions", user_id);
@@ -116,10 +123,13 @@ impl Client {
     }
 
     /// Get ghost posts for a user.
+    ///
+    /// Supports `since` and `until` for time-range filtering in addition to
+    /// cursor-based pagination.
     pub async fn get_user_ghost_posts(
         &self,
         user_id: &UserId,
-        opts: Option<&PaginationOptions>,
+        opts: Option<&PostsOptions>,
     ) -> crate::Result<PostsResponse> {
         if !user_id.is_valid() {
             return Err(error::new_validation_error(
@@ -131,7 +141,7 @@ impl Client {
         }
 
         if let Some(opts) = opts {
-            validation::validate_pagination_options(opts)?;
+            validation::validate_posts_options(opts)?;
         }
 
         let token = self.access_token().await;
@@ -147,6 +157,12 @@ impl Client {
             }
             if let Some(ref after) = opts.after {
                 params.insert("after".into(), after.clone());
+            }
+            if let Some(since) = opts.since {
+                params.insert("since".into(), since.to_string());
+            }
+            if let Some(until) = opts.until {
+                params.insert("until".into(), until.to_string());
             }
         }
 
