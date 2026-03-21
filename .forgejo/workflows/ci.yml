@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo check --all-targets
 
   test:
@@ -26,8 +24,6 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
 
   clippy:
@@ -36,10 +32,6 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets -- -D warnings
 
   fmt:
@@ -47,9 +39,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
       - run: cargo fmt --all -- --check
 
   doc:
@@ -60,8 +49,6 @@ jobs:
       RUSTDOCFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps
 
   msrv:
@@ -69,6 +56,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85.0
-      - uses: Swatinem/rust-cache@v2
+      - run: rustup override set 1.85.0
       - run: cargo check --lib
+      - run: rustup override unset
