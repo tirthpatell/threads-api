@@ -38,9 +38,6 @@ pub struct Post {
     /// Whether this post is a reply.
     #[serde(default)]
     pub is_reply: bool,
-    /// ID of the post being replied to.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
     /// Product type classification.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_product_type: Option<String>,

@@ -57,6 +57,15 @@ pub struct DebugTokenData {
     pub scopes: Vec<String>,
     /// App-scoped user ID.
     pub user_id: String,
+    /// Token type: "USER" or "APP".
+    #[serde(default, rename = "type")]
+    pub token_type: Option<String>,
+    /// Name of the application.
+    #[serde(default)]
+    pub application: Option<String>,
+    /// Unix timestamp when the app's data access expires.
+    #[serde(default)]
+    pub data_access_expires_at: Option<i64>,
 }
 
 /// Response from the app access token endpoint.

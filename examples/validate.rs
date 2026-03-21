@@ -412,13 +412,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(orig_post) => {
             sleep(2).await;
             match client.repost_post(&orig_post.id).await {
-                Ok(repost) => {
+                Ok(repost_id) => {
                     pass(&format!(
                         "repost {} -> original {}",
-                        repost.id, orig_post.id
+                        repost_id, orig_post.id
                     ));
                     sleep(2).await;
-                    cleanup(&client, &repost.id).await;
+                    cleanup(&client, &repost_id).await;
                 }
                 Err(e) => fail(&e),
             }

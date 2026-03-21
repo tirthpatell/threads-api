@@ -136,15 +136,8 @@ impl Client {
         };
         params.insert("metric".into(), metric_str);
 
-        if let Some(ref period) = opts.period {
-            params.insert(
-                "period".into(),
-                serde_json::to_string(period)
-                    .unwrap_or_default()
-                    .trim_matches('"')
-                    .to_owned(),
-            );
-        }
+        // Note: `period` is not a documented request parameter for post insights,
+        // it only appears in the response data. We intentionally omit it here.
 
         if let Some(since) = opts.since {
             params.insert("since".into(), since.timestamp().to_string());
