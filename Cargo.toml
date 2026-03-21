@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Rust client library for the Meta Threads API"
 license = "MIT"
-repository = "https://github.com/tirthpatell/threads-api"
+repository = "https://github.com/tirthpatell/threads-rs"
 keywords = ["threads", "meta", "api", "social-media"]
 categories = ["api-bindings", "web-programming::http-client"]
 

@@ -24,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-threads-rs = { git = "https://github.com/tirthpatell/threads-api" }
+threads-rs = { git = "https://github.com/tirthpatell/threads-rs" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
