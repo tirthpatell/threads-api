@@ -1,8 +1,8 @@
 use std::env;
 use std::time::Duration;
 
-use threads_api::client::{Client, Config};
-use threads_api::types::*;
+use meta_threads::client::{Client, Config};
+use meta_threads::types::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
