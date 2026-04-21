@@ -1,0 +1,59 @@
+variables:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+
+stages:
+  - check
+  - test
+
+fmt:
+  stage: check
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - cargo fmt --all -- --check
+
+check:
+  stage: check
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - cargo check --all-targets
+
+test:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - cargo test --all-targets
+
+clippy:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - cargo clippy --all-targets -- -D warnings
+
+doc:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    RUSTDOCFLAGS: "-Dwarnings"
+  script:
+    - cargo doc --no-deps
+
+msrv:
+  stage: check
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - rustup override set 1.85.0
+    - cargo check --lib
+    - rustup override unset
