@@ -4,6 +4,7 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::RngExt;
 use serde::Deserialize;
+use subtle::ConstantTimeEq;
 
 use crate::client::{Client, TokenInfo};
 use crate::error;
@@ -101,18 +102,12 @@ fn generate_state() -> String {
 
 /// Constant-time byte-slice equality. Returns `false` if lengths differ.
 ///
-/// Used to compare OAuth `state` values without leaking timing information
-/// about the matching prefix length to an attacker who can measure response
-/// latency.
+/// Wraps `subtle::ConstantTimeEq` to compare OAuth `state` values without
+/// leaking timing information about the matching prefix length. The `subtle`
+/// crate uses compiler barriers (`black_box`-style techniques) that
+/// hand-rolled XOR loops can't guarantee against LLVM optimisation.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    a.ct_eq(b).into()
 }
 
 // ---------------------------------------------------------------------------

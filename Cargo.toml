@@ -1,6 +1,6 @@
 [package]
 name = "threads-rs"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust client library for the Meta Threads API"
@@ -21,6 +21,7 @@ rand = "0.10"
 base64 = "0.22"
 tracing = "0.1"
 url = "2"
+subtle = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
