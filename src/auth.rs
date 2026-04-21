@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 
 use crate::client::{Client, TokenInfo};
