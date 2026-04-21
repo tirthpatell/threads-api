@@ -58,10 +58,14 @@ let client = Client::new(config).await?;
 
 // 1. Generate the authorization URL
 let (auth_url, state) = client.get_auth_url(&[]);
-// Redirect user to auth_url, verify state on callback
+// Persist `state` in the user's session (signed cookie, server-side store, ...)
+// and redirect the user to `auth_url`.
 
-// 2. Exchange the authorization code for a short-lived token
-client.exchange_code_for_token("AUTH_CODE").await?;
+// 2. On the OAuth callback, exchange the authorization code for a short-lived
+//    token. You must pass both the state you persisted and the state query
+//    parameter received on the callback; mismatch or empty values fail closed.
+let received_state = "STATE_FROM_CALLBACK_QUERY";
+client.exchange_code_for_token("AUTH_CODE", &state, received_state).await?;
 
 // 3. Convert to a long-lived token (60 days)
 client.get_long_lived_token().await?;

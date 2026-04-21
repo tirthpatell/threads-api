@@ -1,6 +1,6 @@
 [package]
 name = "threads-rs"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust client library for the Meta Threads API"
@@ -10,17 +10,18 @@ keywords = ["threads", "meta", "api", "social-media"]
 categories = ["api-bindings", "web-programming::http-client"]
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json", "form", "query"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "time"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
-rand = "0.9"
+rand = "0.10"
 base64 = "0.22"
 tracing = "0.1"
 url = "2"
+subtle = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

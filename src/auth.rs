@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
+use subtle::ConstantTimeEq;
 
 use crate::client::{Client, TokenInfo};
 use crate::error;
@@ -99,6 +100,16 @@ fn generate_state() -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
+/// Constant-time byte-slice equality. Returns `false` if lengths differ.
+///
+/// Wraps `subtle::ConstantTimeEq` to compare OAuth `state` values without
+/// leaking timing information about the matching prefix length. The `subtle`
+/// crate uses compiler barriers (`black_box`-style techniques) that
+/// hand-rolled XOR loops can't guarantee against LLVM optimisation.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.ct_eq(b).into()
+}
+
 // ---------------------------------------------------------------------------
 // Auth methods on Client
 // ---------------------------------------------------------------------------
@@ -169,8 +180,35 @@ impl Client {
 
     /// Exchange an authorization code for a short-lived access token.
     ///
+    /// Callers **must** pass the `state` value they persisted from
+    /// [`get_auth_url`](Self::get_auth_url) (`stored_state`) and the `state`
+    /// query parameter received on the OAuth callback (`received_state`).
+    /// Both are verified in constant time before any network call; empty or
+    /// mismatched values fail closed, preventing the CSRF attack described in
+    /// RFC 6749 §10.12.
+    ///
     /// On success the token is stored via `set_token_info`.
-    pub async fn exchange_code_for_token(&self, code: &str) -> crate::Result<()> {
+    pub async fn exchange_code_for_token(
+        &self,
+        code: &str,
+        stored_state: &str,
+        received_state: &str,
+    ) -> crate::Result<()> {
+        if stored_state.is_empty() || received_state.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                "OAuth state missing",
+                "Both the stored state (from get_auth_url) and the callback state must be provided",
+            ));
+        }
+        if !constant_time_eq(stored_state.as_bytes(), received_state.as_bytes()) {
+            return Err(error::new_authentication_error(
+                401,
+                "OAuth state mismatch",
+                "Callback state does not match the stored state — possible CSRF attempt",
+            ));
+        }
+
         let cfg = self.config().clone();
 
         let mut form = HashMap::new();
@@ -459,6 +497,54 @@ mod tests {
             .decode(&s)
             .expect("should be valid base64url");
         assert_eq!(decoded.len(), 32);
+    }
+
+    #[test]
+    fn test_constant_time_eq_basic() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+        assert!(!constant_time_eq(b"", b"x"));
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    #[tokio::test]
+    async fn test_exchange_code_for_token_rejects_empty_stored_state() {
+        let client = Client::new(test_config()).await.unwrap();
+        let err = client
+            .exchange_code_for_token("some-code", "", "received-state")
+            .await
+            .expect_err("empty stored state must fail closed");
+        assert!(
+            err.to_string().contains("state missing"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_exchange_code_for_token_rejects_empty_received_state() {
+        let client = Client::new(test_config()).await.unwrap();
+        let err = client
+            .exchange_code_for_token("some-code", "stored-state", "")
+            .await
+            .expect_err("empty received state must fail closed");
+        assert!(
+            err.to_string().contains("state missing"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_exchange_code_for_token_rejects_state_mismatch() {
+        let client = Client::new(test_config()).await.unwrap();
+        let err = client
+            .exchange_code_for_token("some-code", "stored-abc", "callback-xyz")
+            .await
+            .expect_err("state mismatch must fail closed");
+        assert!(
+            err.to_string().contains("state mismatch"),
+            "unexpected error: {err}"
+        );
     }
 
     #[tokio::test]
