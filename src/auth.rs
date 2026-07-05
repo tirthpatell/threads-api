@@ -325,6 +325,9 @@ impl Client {
     }
 
     /// Inspect a token via the `/debug_token` endpoint.
+    ///
+    /// If `input_token` is empty, the client's stored access token is
+    /// inspected instead.
     pub async fn debug_token(&self, input_token: &str) -> crate::Result<DebugTokenResponse> {
         let token = self.access_token().await;
         if token.is_empty() {
@@ -335,10 +338,33 @@ impl Client {
             ));
         }
 
-        let mut params = HashMap::new();
-        params.insert("input_token".into(), input_token.to_owned());
+        let input_token = if input_token.is_empty() {
+            token.clone()
+        } else {
+            input_token.to_owned()
+        };
 
-        let resp = self.http_client.get("/debug_token", params, &token).await?;
+        // Meta's /debug_token expects an app access token (TH|<APP_ID>|<APP_SECRET>)
+        // as the caller. For apps in Development mode, passing a user token here
+        // fails with error code 100 ("The app associated with this request is in
+        // dev mode") even when the user has a role on the app, because Meta
+        // resolves the request's app context from the caller token and enforces
+        // dev-mode role checks against that. Fall back to the user token only if
+        // client_id/client_secret aren't configured, to preserve behavior for
+        // callers that don't supply them.
+        let mut caller_token = self.get_app_access_token_shorthand();
+        if caller_token.is_empty() {
+            caller_token = token;
+        }
+
+        let mut params = HashMap::new();
+        params.insert("input_token".into(), input_token);
+        params.insert("access_token".into(), caller_token.clone());
+
+        let resp = self
+            .http_client
+            .get("/debug_token", params, &caller_token)
+            .await?;
 
         resp.json()
     }

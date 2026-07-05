@@ -118,6 +118,39 @@ impl Default for RetryConfig {
     }
 }
 
+/// Returns `true` if `code` is a well-known Meta/Threads top-level auth error
+/// that should always map to an authentication error, regardless of HTTP
+/// status. Meta returns 5xx for these on some endpoints (e.g. `/debug_token`
+/// returns HTTP 500 for error 190).
+fn is_auth_error_code(code: u16) -> bool {
+    matches!(
+        code,
+        190 // Invalid/revoked/expired access token (subcodes 463, 467)
+        | 102 // Session invalidated / login required
+    )
+}
+
+/// Returns `true` if the given Meta error code is a permanent failure that
+/// won't be fixed by retrying. Meta returns HTTP 5xx for these on some
+/// endpoints (notably `/threads_publish`), which would otherwise be
+/// misclassified as a transient 5xx and retried — wasting API quota that's
+/// counted per attempt.
+///
+/// Auth codes (190, 102) are deliberately not listed here; they go through
+/// the authentication-error short-circuit in `is_retryable_error`.
+pub(crate) fn is_non_retryable_permanent_error_code(code: u16) -> bool {
+    matches!(
+        code,
+        // GraphMethodException — "Application does not have permission for
+        // this action". Meta returns this from /threads_publish for some
+        // app/permission configurations; per the API troubleshooting docs
+        // the publish may actually have succeeded even when this is
+        // returned, so callers can recover by checking container status.
+        // Retrying the publish never helps and burns publishing quota.
+        10
+    )
+}
+
 /// HTTP client with retry logic, rate limiting, and error handling.
 pub struct HttpClient {
     client: reqwest::Client,
@@ -440,6 +473,16 @@ impl HttpClient {
             details.into_owned()
         };
 
+        // API-level auth codes take priority over HTTP status. Meta returns
+        // 5xx for token failures on some endpoints (e.g. /debug_token returns
+        // HTTP 500 for error 190), which would otherwise be misclassified as
+        // a retryable 5xx.
+        if is_auth_error_code(error_code) {
+            let mut err = error::new_authentication_error(error_code, &message, &details);
+            error::set_error_metadata(&mut err, false, resp.status_code, error_subcode);
+            return err;
+        }
+
         let mut err = match resp.status_code {
             401 | 403 => error::new_authentication_error(error_code, &message, &details),
             429 => {
@@ -477,6 +520,23 @@ impl HttpClient {
 
     /// Check if an error should trigger a retry.
     fn is_retryable_error(&self, err: &Error) -> bool {
+        // Authentication errors are never retryable — the token is invalid
+        // and no amount of retrying will fix it. Guard this before the
+        // status-code check below: the HTTP status stored on the error (e.g.
+        // 500 from graph.threads.net) would otherwise re-enable retries via
+        // the 5xx branch.
+        if err.is_authentication() {
+            return false;
+        }
+        // Permanent error codes short-circuit both the transient flag and
+        // the 5xx branch below. Meta returns 5xx for some non-transient API
+        // codes (e.g. code 10 from /threads_publish); without this check
+        // we'd retry and burn quota.
+        if let Some(fields) = error::extract_base_fields(err) {
+            if is_non_retryable_permanent_error_code(fields.code) {
+                return false;
+            }
+        }
         if err.is_retryable() {
             return true;
         }
@@ -583,6 +643,103 @@ mod tests {
         assert_eq!(info.limit, 100);
         assert_eq!(info.remaining, 42);
         assert_eq!(info.retry_after, Some(Duration::from_secs(60)));
+    }
+
+    fn test_client() -> HttpClient {
+        HttpClient::new(
+            Duration::from_secs(30),
+            RetryConfig::default(),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    fn error_response(status_code: u16, body: &str) -> Response {
+        Response {
+            status_code,
+            body: body.as_bytes().to_vec(),
+            request_id: "test".to_owned(),
+            rate_limit: None,
+            duration: Duration::ZERO,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_auth_error_code_190_classified_as_auth_despite_http_500() {
+        let client = test_client();
+        let resp = error_response(
+            500,
+            r#"{"error":{"message":"Invalid OAuth access token","code":190}}"#,
+        );
+        let err = client.create_error_from_response(&resp).await;
+        assert!(err.is_authentication(), "code 190 must map to auth error");
+        assert!(
+            !client.is_retryable_error(&err),
+            "auth errors must never be retried"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_auth_error_code_102_classified_as_auth() {
+        let client = test_client();
+        let resp = error_response(
+            500,
+            r#"{"error":{"message":"Session invalidated","code":102}}"#,
+        );
+        let err = client.create_error_from_response(&resp).await;
+        assert!(err.is_authentication());
+        assert!(!client.is_retryable_error(&err));
+    }
+
+    #[tokio::test]
+    async fn test_error_code_10_not_retryable_despite_http_500() {
+        let client = test_client();
+        let resp = error_response(
+            500,
+            r#"{"error":{"message":"Application does not have permission for this action","code":10}}"#,
+        );
+        let err = client.create_error_from_response(&resp).await;
+        assert!(err.is_api());
+        assert!(
+            !client.is_retryable_error(&err),
+            "code 10 is permanent — retrying burns publish quota"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_error_code_10_not_retryable_even_when_flagged_transient() {
+        let client = test_client();
+        let resp = error_response(
+            500,
+            r#"{"error":{"message":"perm failure","code":10,"is_transient":true}}"#,
+        );
+        let err = client.create_error_from_response(&resp).await;
+        assert!(!client.is_retryable_error(&err));
+    }
+
+    #[tokio::test]
+    async fn test_generic_500_still_retryable() {
+        let client = test_client();
+        let resp = error_response(500, r#"{"error":{"message":"Internal error","code":1}}"#);
+        let err = client.create_error_from_response(&resp).await;
+        assert!(client.is_retryable_error(&err));
+    }
+
+    #[test]
+    fn test_is_auth_error_code() {
+        assert!(is_auth_error_code(190));
+        assert!(is_auth_error_code(102));
+        assert!(!is_auth_error_code(10));
+        assert!(!is_auth_error_code(1));
+    }
+
+    #[test]
+    fn test_is_non_retryable_permanent_error_code() {
+        assert!(is_non_retryable_permanent_error_code(10));
+        assert!(!is_non_retryable_permanent_error_code(190));
+        assert!(!is_non_retryable_permanent_error_code(1));
     }
 
     #[tokio::test]

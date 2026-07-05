@@ -8,6 +8,8 @@ pub mod location;
 pub mod posts;
 /// Post deletion endpoints.
 pub mod posts_delete;
+/// Recovery from `/threads_publish` false failures.
+pub mod posts_publish_recovery;
 /// Post retrieval and listing endpoints.
 pub mod posts_read;
 /// Reply management endpoints.

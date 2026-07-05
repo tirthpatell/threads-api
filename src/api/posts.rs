@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::api::posts_publish_recovery as recovery;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
@@ -78,7 +79,19 @@ impl Client {
         // Text containers are ready immediately — skip polling
         let params = self.build_text_params(content, &user_id);
         let container_id = self.create_container(params).await?;
-        self.publish_container(&container_id).await
+        let publish_start = chrono::Utc::now();
+        match self.publish_container(&container_id).await {
+            Ok(post) => Ok(post),
+            Err(err) => {
+                self.recover_or_original(
+                    &container_id,
+                    publish_start,
+                    err,
+                    recovery::text_matcher(content),
+                )
+                .await
+            }
+        }
     }
 
     /// Create an image post.
@@ -123,7 +136,19 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        let publish_start = chrono::Utc::now();
+        match self.publish_container(&container_id).await {
+            Ok(post) => Ok(post),
+            Err(err) => {
+                self.recover_or_original(
+                    &container_id,
+                    publish_start,
+                    err,
+                    recovery::image_matcher(content),
+                )
+                .await
+            }
+        }
     }
 
     /// Create a video post.
@@ -168,7 +193,19 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        let publish_start = chrono::Utc::now();
+        match self.publish_container(&container_id).await {
+            Ok(post) => Ok(post),
+            Err(err) => {
+                self.recover_or_original(
+                    &container_id,
+                    publish_start,
+                    err,
+                    recovery::video_matcher(content),
+                )
+                .await
+            }
+        }
     }
 
     /// Create a carousel post.
@@ -210,7 +247,19 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        let publish_start = chrono::Utc::now();
+        match self.publish_container(&container_id).await {
+            Ok(post) => Ok(post),
+            Err(err) => {
+                self.recover_or_original(
+                    &container_id,
+                    publish_start,
+                    err,
+                    recovery::carousel_matcher(content),
+                )
+                .await
+            }
+        }
     }
 
     /// Create a quote post — a text post that quotes another post.

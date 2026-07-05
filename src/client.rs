@@ -472,10 +472,67 @@ impl Client {
             }),
         };
 
-        // Validate and resolve accurate token info via debug_token
-        let debug_resp = client.debug_token(access_token).await?;
+        // Validate and get accurate token information via debug_token. If that
+        // endpoint fails (graph.threads.net returns HTTP 500 for valid tokens
+        // on dev-mode apps), fall back to a /me call which reliably validates
+        // the token and returns the user ID needed to bootstrap TokenInfo.
+        let debug_err = match client.debug_token(access_token).await {
+            Ok(debug_resp) => {
+                client
+                    .set_token_from_debug_info(access_token, &debug_resp)
+                    .await?;
+                return Ok(client);
+            }
+            Err(e) => e,
+        };
+
+        // debug_token failed — verify with /me as fallback.
+        let mut params = std::collections::HashMap::new();
+        params.insert("fields".to_owned(), "id".to_owned());
+        let me_resp = client
+            .http_client
+            .get("/me", params, access_token)
+            .await
+            .map_err(|me_err| {
+                error::new_authentication_error(
+                    401,
+                    "Failed to validate token",
+                    &format!("debug_token: {debug_err}, /me: {me_err}"),
+                )
+            })?;
+
+        #[derive(serde::Deserialize)]
+        struct Me {
+            #[serde(default)]
+            id: String,
+        }
+
+        let me: Me = me_resp.json().map_err(|json_err| {
+            error::new_authentication_error(
+                401,
+                "Failed to parse /me response",
+                &format!("debug_token also failed: {debug_err}; /me parse error: {json_err}"),
+            )
+        })?;
+
+        if me.id.is_empty() {
+            return Err(error::new_authentication_error(
+                401,
+                "Failed to validate token",
+                &format!("/me returned no user ID; debug_token error: {debug_err}"),
+            ));
+        }
+
+        // /me succeeded — token is valid. Set token info with the user ID and
+        // a 60-day expiry (standard Threads long-lived token lifetime).
         client
-            .set_token_from_debug_info(access_token, &debug_resp)
+            .set_token_info(TokenInfo {
+                access_token: access_token.to_owned(),
+                token_type: "bearer".into(),
+                expires_at: Utc::now() + chrono::Duration::days(60),
+                user_id: me.id,
+                created_at: Utc::now(),
+            })
             .await?;
 
         Ok(client)
