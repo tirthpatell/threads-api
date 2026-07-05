@@ -486,20 +486,16 @@ impl Client {
             Err(e) => e,
         };
 
-        // debug_token failed — verify with /me as fallback.
+        // debug_token failed — verify with /me as fallback. Propagate the
+        // typed /me error on failure (auth vs transient matters to callers);
+        // the debug_token error only provides context.
+        tracing::debug!(
+            error = %debug_err,
+            "debug_token failed; falling back to /me for token validation"
+        );
         let mut params = std::collections::HashMap::new();
         params.insert("fields".to_owned(), "id".to_owned());
-        let me_resp = client
-            .http_client
-            .get("/me", params, access_token)
-            .await
-            .map_err(|me_err| {
-                error::new_authentication_error(
-                    401,
-                    "Failed to validate token",
-                    &format!("debug_token: {debug_err}, /me: {me_err}"),
-                )
-            })?;
+        let me_resp = client.http_client.get("/me", params, access_token).await?;
 
         #[derive(serde::Deserialize)]
         struct Me {
@@ -507,20 +503,12 @@ impl Client {
             id: String,
         }
 
-        let me: Me = me_resp.json().map_err(|json_err| {
-            error::new_authentication_error(
-                401,
-                "Failed to parse /me response",
-                &format!("debug_token also failed: {debug_err}; /me parse error: {json_err}"),
-            )
-        })?;
+        let me: Me = me_resp.json()?;
 
+        // /me answered but without a usable ID — the token could not be
+        // validated either way, so surface the original debug_token error.
         if me.id.is_empty() {
-            return Err(error::new_authentication_error(
-                401,
-                "Failed to validate token",
-                &format!("/me returned no user ID; debug_token error: {debug_err}"),
-            ));
+            return Err(debug_err);
         }
 
         // /me succeeded — token is valid. Set token info with the user ID and

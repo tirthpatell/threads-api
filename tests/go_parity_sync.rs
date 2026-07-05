@@ -43,20 +43,7 @@ async fn authenticated_client(base_url: &str) -> Client {
 fn text_content(text: &str) -> TextPostContent {
     TextPostContent {
         text: text.to_owned(),
-        link_attachment: None,
-        poll_attachment: None,
-        reply_control: None,
-        reply_to_id: None,
-        topic_tag: None,
-        allowlisted_country_codes: None,
-        location_id: None,
-        auto_publish_text: false,
-        quoted_post_id: None,
-        text_entities: None,
-        text_attachment: None,
-        gif_attachment: None,
-        is_ghost_post: false,
-        enable_reply_approvals: false,
+        ..Default::default()
     }
 }
 
@@ -268,11 +255,14 @@ async fn create_text_post_recovers_from_code_10_false_failure() {
         .mount(&server)
         .await;
 
+    // The list includes a post with a media_type this library doesn't know —
+    // it must be skipped, not break deserialization of the whole response.
     Mock::given(method("GET"))
         .and(path("/user-1/threads"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": [
                 published_text_post("other-post", "unrelated text"),
+                {"id": "future-post", "media_type": "SOME_FUTURE_TYPE", "text": "hello recovery"},
                 published_text_post("recovered-post", "hello recovery"),
             ]
         })))

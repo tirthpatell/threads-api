@@ -142,7 +142,7 @@ pub struct PostContent {
 }
 
 /// Content for creating a text post.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TextPostContent {
     /// Post text content.
     pub text: String,
@@ -191,7 +191,7 @@ pub struct TextPostContent {
 }
 
 /// Content for creating an image post.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ImagePostContent {
     /// Post text content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -231,7 +231,7 @@ pub struct ImagePostContent {
 }
 
 /// Content for creating a video post.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VideoPostContent {
     /// Post text content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -271,7 +271,7 @@ pub struct VideoPostContent {
 }
 
 /// Content for creating a carousel post.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CarouselPostContent {
     /// Post text content.
     #[serde(default, skip_serializing_if = "Option::is_none")]

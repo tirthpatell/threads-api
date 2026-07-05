@@ -14,7 +14,6 @@ use chrono::{DateTime, Utc};
 
 use crate::client::Client;
 use crate::error;
-use crate::http::is_non_retryable_permanent_error_code;
 use crate::types::{
     CarouselPostContent, ContainerId, ImagePostContent, MediaType, Post, PostId, PostsOptions,
     TextPostContent, UserId, VideoPostContent,
@@ -37,15 +36,28 @@ const MAX_RECOVERY_STATUS_POLLS: u32 = 5;
 const MAX_RECOVERY_LIST_POLLS: u32 = 3;
 const RECOVERY_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Returns `true` if `code` is a Meta error code for which `/threads_publish`
+/// is known to sometimes report failure despite the container actually being
+/// published. Deliberately independent from the retry policy's permanent-code
+/// list in `http.rs`: "don't waste retries on this code" and "this publish
+/// may have secretly succeeded" are different judgments that happen to share
+/// code 10 today — adding a genuinely-failed permanent code to the retry list
+/// must not silently start triggering recovery polls here.
+fn is_publish_false_failure_code(code: u16) -> bool {
+    matches!(
+        code,
+        // GraphMethodException — "Application does not have permission for
+        // this action". Per the Threads API troubleshooting docs the publish
+        // may actually have succeeded when this is returned.
+        10
+    )
+}
+
 /// Returns `true` if `err` matches the documented Meta pattern where
 /// `/threads_publish` returns an error response despite the container
-/// actually being published. Currently this is code 10 (GraphMethodException),
-/// which Meta returns from `/threads_publish` for some app/permission
-/// configurations after-the-fact, with the container moving to PUBLISHED
-/// regardless.
+/// actually being published.
 fn should_attempt_publish_recovery(err: &error::Error) -> bool {
-    error::extract_base_fields(err)
-        .is_some_and(|fields| is_non_retryable_permanent_error_code(fields.code))
+    error::extract_base_fields(err).is_some_and(|fields| is_publish_false_failure_code(fields.code))
 }
 
 impl Client {
@@ -123,10 +135,7 @@ impl Client {
         if user_id.is_empty() {
             return None;
         }
-        let since_ts = (publish_start
-            - chrono::Duration::from_std(PUBLISH_RECOVERY_WINDOW)
-                .unwrap_or(chrono::Duration::seconds(5)))
-        .timestamp();
+        let since_ts = publish_start.timestamp() - PUBLISH_RECOVERY_WINDOW.as_secs() as i64;
 
         let opts = PostsOptions {
             limit: Some(25),
@@ -293,9 +302,8 @@ fn media_content_matches(
 }
 
 /// Matcher for a text-only post. Text posts always have non-empty text
-/// (validated upstream), so text equality is itself a strong discriminator.
-/// Quote state must match in both directions, and non-replies additionally
-/// compare topic_tag to disambiguate same-text posts across different topics.
+/// (validated upstream), so text equality is itself a strong discriminator
+/// and the shared discriminator gates are trivially satisfied.
 pub(crate) fn text_matcher(content: &TextPostContent) -> impl Fn(&Post) -> bool {
     let text = content.text.clone();
     let topic_tag = content.topic_tag.clone().unwrap_or_default();
@@ -310,16 +318,7 @@ pub(crate) fn text_matcher(content: &TextPostContent) -> impl Fn(&Post) -> bool 
         ) {
             return false;
         }
-        if !quote_matches(post, quoted.as_ref()) {
-            return false;
-        }
-        if post_text(post) != text {
-            return false;
-        }
-        match reply_to.as_ref() {
-            Some(parent) => post.is_reply && replied_to_id(post) == Some(parent),
-            None => !post.is_reply && post_topic_tag(post) == topic_tag,
-        }
+        media_content_matches(post, &text, &topic_tag, reply_to.as_ref(), quoted.as_ref())
     }
 }
 
@@ -417,20 +416,7 @@ mod tests {
     fn text_content(text: &str) -> TextPostContent {
         TextPostContent {
             text: text.to_owned(),
-            link_attachment: None,
-            poll_attachment: None,
-            reply_control: None,
-            reply_to_id: None,
-            topic_tag: None,
-            allowlisted_country_codes: None,
-            location_id: None,
-            auto_publish_text: false,
-            quoted_post_id: None,
-            text_entities: None,
-            text_attachment: None,
-            gif_attachment: None,
-            is_ghost_post: false,
-            enable_reply_approvals: false,
+            ..Default::default()
         }
     }
 
@@ -438,16 +424,7 @@ mod tests {
         ImagePostContent {
             text: text.map(str::to_owned),
             image_url: "https://example.com/img.jpg".into(),
-            alt_text: None,
-            reply_control: None,
-            reply_to_id: None,
-            topic_tag: None,
-            allowlisted_country_codes: None,
-            location_id: None,
-            quoted_post_id: None,
-            text_entities: None,
-            is_spoiler_media: false,
-            enable_reply_approvals: false,
+            ..Default::default()
         }
     }
 
@@ -624,16 +601,7 @@ mod tests {
         let content = VideoPostContent {
             text: Some("vid".into()),
             video_url: "https://example.com/v.mp4".into(),
-            alt_text: None,
-            reply_control: None,
-            reply_to_id: None,
-            topic_tag: None,
-            allowlisted_country_codes: None,
-            location_id: None,
-            quoted_post_id: None,
-            text_entities: None,
-            is_spoiler_media: false,
-            enable_reply_approvals: false,
+            ..Default::default()
         };
         let matches = video_matcher(&content);
 
@@ -653,15 +621,7 @@ mod tests {
         let content = CarouselPostContent {
             text: Some("album".into()),
             children: vec![ContainerId::from("c1"), ContainerId::from("c2")],
-            reply_control: None,
-            reply_to_id: None,
-            topic_tag: None,
-            allowlisted_country_codes: None,
-            location_id: None,
-            quoted_post_id: None,
-            text_entities: None,
-            is_spoiler_media: false,
-            enable_reply_approvals: false,
+            ..Default::default()
         };
         let matches = carousel_matcher(&content);
 

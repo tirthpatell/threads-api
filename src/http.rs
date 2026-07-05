@@ -138,7 +138,12 @@ fn is_auth_error_code(code: u16) -> bool {
 ///
 /// Auth codes (190, 102) are deliberately not listed here; they go through
 /// the authentication-error short-circuit in `is_retryable_error`.
-pub(crate) fn is_non_retryable_permanent_error_code(code: u16) -> bool {
+///
+/// Note: `posts_publish_recovery` keeps its own independent list of codes
+/// that may indicate a secretly-successful publish. The two concepts ("don't
+/// retry this" vs "this may have actually succeeded") happen to share code 10
+/// today, but tuning one must not silently change the other.
+fn is_non_retryable_permanent_error_code(code: u16) -> bool {
     matches!(
         code,
         // GraphMethodException — "Application does not have permission for
@@ -430,16 +435,22 @@ impl HttpClient {
             error: ApiErrorBody,
         }
 
+        // code and error_subcode are deserialized as u64: Meta subcodes
+        // routinely exceed u16 (e.g. 2207026), and an out-of-range integer
+        // would fail the WHOLE body parse under narrower types — silently
+        // dropping the code/message and defeating auth/permanent-error
+        // classification. Values that don't fit our u16 error fields are
+        // clamped on conversion below instead.
         #[derive(serde::Deserialize, Default)]
         struct ApiErrorBody {
             #[serde(default)]
             message: String,
             #[serde(default)]
-            code: u16,
+            code: u64,
             #[serde(default)]
             is_transient: bool,
             #[serde(default)]
-            error_subcode: u16,
+            error_subcode: u64,
         }
 
         let mut message = format!("HTTP {}", resp.status_code);
@@ -449,12 +460,21 @@ impl HttpClient {
 
         if !resp.body.is_empty() {
             if let Ok(api_err) = serde_json::from_slice::<ApiErrorResponse>(&resp.body) {
+                // Apply code/transient/subcode independently of the message:
+                // Meta can return a code with an empty message, and gating
+                // classification on the message would misroute e.g. code 190
+                // into the retryable-5xx path.
                 if !api_err.error.message.is_empty() {
                     message = api_err.error.message;
-                    is_transient = api_err.error.is_transient;
-                    error_subcode = api_err.error.error_subcode;
-                    if api_err.error.code != 0 {
-                        error_code = api_err.error.code;
+                }
+                is_transient = api_err.error.is_transient;
+                error_subcode = u16::try_from(api_err.error.error_subcode).unwrap_or(0);
+                if api_err.error.code != 0 {
+                    // A code too large for our u16 error fields falls back to
+                    // the HTTP status; the classification codes we act on
+                    // (190, 102, 10) always fit.
+                    if let Ok(code) = u16::try_from(api_err.error.code) {
+                        error_code = code;
                     }
                 }
             }
@@ -528,25 +548,20 @@ impl HttpClient {
         if err.is_authentication() {
             return false;
         }
-        // Permanent error codes short-circuit both the transient flag and
-        // the 5xx branch below. Meta returns 5xx for some non-transient API
-        // codes (e.g. code 10 from /threads_publish); without this check
-        // we'd retry and burn quota.
         if let Some(fields) = error::extract_base_fields(err) {
+            // Permanent error codes short-circuit both the transient flag
+            // and the 5xx branch below. Meta returns 5xx for some
+            // non-transient API codes (e.g. code 10 from /threads_publish);
+            // without this check we'd retry and burn quota.
             if is_non_retryable_permanent_error_code(fields.code) {
                 return false;
             }
-        }
-        if err.is_retryable() {
-            return true;
-        }
-        // Also retry 5xx server errors
-        if let Some(fields) = error::extract_base_fields(err) {
+            // Retry 5xx server errors
             if fields.http_status_code >= 500 && fields.http_status_code < 600 {
                 return true;
             }
         }
-        false
+        err.is_retryable()
     }
 
     /// Wrap a reqwest error into our typed errors.
@@ -725,6 +740,34 @@ mod tests {
         let resp = error_response(500, r#"{"error":{"message":"Internal error","code":1}}"#);
         let err = client.create_error_from_response(&resp).await;
         assert!(client.is_retryable_error(&err));
+    }
+
+    #[tokio::test]
+    async fn test_error_subcode_exceeding_u16_does_not_break_classification() {
+        // Meta subcodes routinely exceed u16 (e.g. 2207026). If the body
+        // parse rejected them, code 190 would be lost and the error would be
+        // misclassified as a retryable 5xx.
+        let client = test_client();
+        let resp = error_response(
+            500,
+            r#"{"error":{"message":"Invalid OAuth access token","code":190,"error_subcode":2207026}}"#,
+        );
+        let err = client.create_error_from_response(&resp).await;
+        assert!(err.is_authentication());
+        assert!(!client.is_retryable_error(&err));
+        assert!(err.to_string().contains("Invalid OAuth access token"));
+    }
+
+    #[tokio::test]
+    async fn test_error_code_applied_even_with_empty_message() {
+        let client = test_client();
+        let resp = error_response(500, r#"{"error":{"code":190,"message":""}}"#);
+        let err = client.create_error_from_response(&resp).await;
+        assert!(
+            err.is_authentication(),
+            "code 190 must classify as auth even without a message"
+        );
+        assert!(!client.is_retryable_error(&err));
     }
 
     #[test]
