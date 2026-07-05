@@ -436,6 +436,19 @@ impl Client {
     /// Calls the debug_token endpoint to resolve the user ID and exact
     /// expiry from the token. Useful for scripts and tests where the
     /// token is already known.
+    ///
+    /// # Expiry accuracy on the `/me` fallback
+    ///
+    /// If `debug_token` fails (graph.threads.net returns HTTP 500 for valid
+    /// tokens on dev-mode apps), the token is validated via `/me` instead.
+    /// That endpoint does not report the token's remaining lifetime, so
+    /// `expires_at` is assumed to be a full 60 days (the standard Threads
+    /// long-lived token lifetime) from now. For a token issued earlier, the
+    /// stored expiry overestimates the real one and delays the automatic
+    /// refresh window — callers that consistently hit this fallback should
+    /// refresh proactively (e.g. call [`refresh_token`](Self::refresh_token)
+    /// periodically) rather than relying on
+    /// [`is_token_expiring_soon`](Self::is_token_expiring_soon).
     pub async fn with_token(mut config: Config, access_token: &str) -> crate::Result<Self> {
         config.set_defaults();
         config.validate()?;
