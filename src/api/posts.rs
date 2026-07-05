@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::api::posts_publish_recovery as recovery;
 use crate::client::Client;
 use crate::constants;
 use crate::error;
@@ -78,7 +79,8 @@ impl Client {
         // Text containers are ready immediately — skip polling
         let params = self.build_text_params(content, &user_id);
         let container_id = self.create_container(params).await?;
-        self.publish_container(&container_id).await
+        self.publish_with_recovery(&container_id, recovery::text_matcher(content))
+            .await
     }
 
     /// Create an image post.
@@ -123,7 +125,8 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        self.publish_with_recovery(&container_id, recovery::image_matcher(content))
+            .await
     }
 
     /// Create a video post.
@@ -168,7 +171,8 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        self.publish_with_recovery(&container_id, recovery::video_matcher(content))
+            .await
     }
 
     /// Create a carousel post.
@@ -210,7 +214,8 @@ impl Client {
         let container_id = self.create_container(params).await?;
         let cid = ContainerId::from(container_id.as_str());
         self.wait_for_container_ready(&cid).await?;
-        self.publish_container(&container_id).await
+        self.publish_with_recovery(&container_id, recovery::carousel_matcher(content))
+            .await
     }
 
     /// Create a quote post — a text post that quotes another post.
@@ -222,19 +227,7 @@ impl Client {
         let content = TextPostContent {
             text: text.to_owned(),
             quoted_post_id: Some(quoted_post_id.clone()),
-            link_attachment: None,
-            poll_attachment: None,
-            reply_control: None,
-            reply_to_id: None,
-            topic_tag: None,
-            allowlisted_country_codes: None,
-            location_id: None,
-            auto_publish_text: false,
-            text_entities: None,
-            text_attachment: None,
-            gif_attachment: None,
-            is_ghost_post: false,
-            enable_reply_approvals: false,
+            ..Default::default()
         };
         self.create_text_post(&content).await
     }
@@ -366,6 +359,27 @@ impl Client {
 
         let container: ContainerResponse = resp.json()?;
         Ok(container.id)
+    }
+
+    /// Publish a media container, attempting false-failure recovery on error.
+    ///
+    /// `matches` identifies the resulting post among the user's recent posts
+    /// if Meta reports a publish failure that actually succeeded (see
+    /// `posts_publish_recovery`). On unrecovered errors the original publish
+    /// error is returned.
+    async fn publish_with_recovery(
+        &self,
+        container_id: &str,
+        matches: impl Fn(&Post) -> bool,
+    ) -> crate::Result<Post> {
+        let publish_start = chrono::Utc::now();
+        match self.publish_container(container_id).await {
+            Ok(post) => Ok(post),
+            Err(err) => {
+                self.recover_or_original(container_id, publish_start, err, matches)
+                    .await
+            }
+        }
     }
 
     /// Publish a media container and return the resulting post.

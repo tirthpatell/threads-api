@@ -139,6 +139,13 @@ pub enum MediaType {
     /// Text post (response-only media type from API).
     #[serde(rename = "TEXT_POST")]
     TextPost,
+    /// Any media type this library doesn't know yet (forward compatibility).
+    ///
+    /// Without this fallback, Meta introducing a new `media_type` value would
+    /// fail deserialization of the entire response for every post-listing
+    /// call that happens to include one such post.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Poll options when creating a post with a poll.
@@ -413,6 +420,15 @@ mod tests {
         assert_eq!(json, r#""TEXT_POST""#);
         let back: MediaType = serde_json::from_str(&json).unwrap();
         assert_eq!(back, MediaType::TextPost);
+    }
+
+    #[test]
+    fn test_media_type_unknown_value_deserializes() {
+        // A media_type value this library doesn't know yet must not fail the
+        // whole response deserialization (e.g. during publish recovery, any
+        // post in the listed window could carry a newly introduced type).
+        let back: MediaType = serde_json::from_str(r#""SOME_FUTURE_TYPE""#).unwrap();
+        assert_eq!(back, MediaType::Unknown);
     }
 
     #[test]

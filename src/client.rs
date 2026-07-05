@@ -436,6 +436,19 @@ impl Client {
     /// Calls the debug_token endpoint to resolve the user ID and exact
     /// expiry from the token. Useful for scripts and tests where the
     /// token is already known.
+    ///
+    /// # Expiry accuracy on the `/me` fallback
+    ///
+    /// If `debug_token` fails (graph.threads.net returns HTTP 500 for valid
+    /// tokens on dev-mode apps), the token is validated via `/me` instead.
+    /// That endpoint does not report the token's remaining lifetime, so
+    /// `expires_at` is assumed to be a full 60 days (the standard Threads
+    /// long-lived token lifetime) from now. For a token issued earlier, the
+    /// stored expiry overestimates the real one and delays the automatic
+    /// refresh window — callers that consistently hit this fallback should
+    /// refresh proactively (e.g. call [`refresh_token`](Self::refresh_token)
+    /// periodically) rather than relying on
+    /// [`is_token_expiring_soon`](Self::is_token_expiring_soon).
     pub async fn with_token(mut config: Config, access_token: &str) -> crate::Result<Self> {
         config.set_defaults();
         config.validate()?;
@@ -472,10 +485,55 @@ impl Client {
             }),
         };
 
-        // Validate and resolve accurate token info via debug_token
-        let debug_resp = client.debug_token(access_token).await?;
+        // Validate and get accurate token information via debug_token. If that
+        // endpoint fails (graph.threads.net returns HTTP 500 for valid tokens
+        // on dev-mode apps), fall back to a /me call which reliably validates
+        // the token and returns the user ID needed to bootstrap TokenInfo.
+        let debug_err = match client.debug_token(access_token).await {
+            Ok(debug_resp) => {
+                client
+                    .set_token_from_debug_info(access_token, &debug_resp)
+                    .await?;
+                return Ok(client);
+            }
+            Err(e) => e,
+        };
+
+        // debug_token failed — verify with /me as fallback. Propagate the
+        // typed /me error on failure (auth vs transient matters to callers);
+        // the debug_token error only provides context.
+        tracing::debug!(
+            error = %debug_err,
+            "debug_token failed; falling back to /me for token validation"
+        );
+        let mut params = std::collections::HashMap::new();
+        params.insert("fields".to_owned(), "id".to_owned());
+        let me_resp = client.http_client.get("/me", params, access_token).await?;
+
+        #[derive(serde::Deserialize)]
+        struct Me {
+            #[serde(default)]
+            id: String,
+        }
+
+        let me: Me = me_resp.json()?;
+
+        // /me answered but without a usable ID — the token could not be
+        // validated either way, so surface the original debug_token error.
+        if me.id.is_empty() {
+            return Err(debug_err);
+        }
+
+        // /me succeeded — token is valid. Set token info with the user ID and
+        // a 60-day expiry (standard Threads long-lived token lifetime).
         client
-            .set_token_from_debug_info(access_token, &debug_resp)
+            .set_token_info(TokenInfo {
+                access_token: access_token.to_owned(),
+                token_type: "bearer".into(),
+                expires_at: Utc::now() + chrono::Duration::days(60),
+                user_id: me.id,
+                created_at: Utc::now(),
+            })
             .await?;
 
         Ok(client)
