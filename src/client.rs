@@ -250,7 +250,9 @@ impl Config {
 pub struct TokenInfo {
     /// The OAuth access token.
     pub access_token: String,
-    /// Token type (usually "bearer").
+    /// Token type, normalized to the canonical
+    /// [`TOKEN_TYPE_BEARER`](crate::constants::TOKEN_TYPE_BEARER) spelling
+    /// whenever the client sets it.
     pub token_type: String,
     /// When the token expires.
     pub expires_at: DateTime<Utc>,
@@ -258,6 +260,22 @@ pub struct TokenInfo {
     pub user_id: String,
     /// When the token was created.
     pub created_at: DateTime<Utc>,
+}
+
+impl TokenInfo {
+    /// Return a copy with a canonical [`token_type`](Self::token_type).
+    ///
+    /// Tokens reach the client from several places — the token endpoints,
+    /// persisted storage written by older versions, callers building
+    /// `TokenInfo` by hand — and every one of them goes through here before
+    /// becoming client state. Tokens loaded at construction are normalized in
+    /// memory only; the backing store keeps its original spelling until the
+    /// next [`set_token_info`](Client::set_token_info) writes through it.
+    fn normalized(&self) -> Self {
+        let mut normalized = self.clone();
+        normalized.token_type = crate::auth::normalize_token_type(Some(&self.token_type));
+        normalized
+    }
 }
 
 /// Trait for persistent token storage.
@@ -376,6 +394,7 @@ impl Client {
 
         // Try to load existing token
         let (access_token, token_info) = if let Ok(info) = token_storage.load().await {
+            let info = info.normalized();
             let at = info.access_token.clone();
             (at, Some(info))
         } else {
@@ -413,6 +432,7 @@ impl Client {
         )?;
 
         let (access_token, token_info) = if let Ok(info) = token_storage.load().await {
+            let info = info.normalized();
             let at = info.access_token.clone();
             (at, Some(info))
         } else {
@@ -468,7 +488,7 @@ impl Client {
         // Set a temporary token so we can call debug_token
         let temp_info = TokenInfo {
             access_token: access_token.to_owned(),
-            token_type: "bearer".into(),
+            token_type: crate::constants::TOKEN_TYPE_BEARER.to_owned(),
             expires_at: Utc::now() + chrono::Duration::hours(1),
             user_id: String::new(),
             created_at: Utc::now(),
@@ -529,7 +549,7 @@ impl Client {
         client
             .set_token_info(TokenInfo {
                 access_token: access_token.to_owned(),
-                token_type: "bearer".into(),
+                token_type: crate::constants::TOKEN_TYPE_BEARER.to_owned(),
                 expires_at: Utc::now() + chrono::Duration::days(60),
                 user_id: me.id,
                 created_at: Utc::now(),
@@ -549,6 +569,7 @@ impl Client {
 
     /// Set token information (thread-safe).
     pub async fn set_token_info(&self, token_info: TokenInfo) -> crate::Result<()> {
+        let token_info = token_info.normalized();
         self.token_storage.store(&token_info).await?;
         let mut state = self.token_state.write().await;
         state.access_token = token_info.access_token.clone();
