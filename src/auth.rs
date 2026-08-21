@@ -7,6 +7,7 @@ use serde::Deserialize;
 use subtle::ConstantTimeEq;
 
 use crate::client::{Client, TokenInfo};
+use crate::constants::TOKEN_TYPE_BEARER;
 use crate::error;
 use crate::http::RequestBody;
 
@@ -15,11 +16,17 @@ use crate::http::RequestBody;
 // ---------------------------------------------------------------------------
 
 /// Response from the short-lived token exchange (`/oauth/access_token`).
+///
+/// `token_type` holds the raw wire value; use
+/// [`normalized_token_type`](TokenResponse::normalized_token_type) for the
+/// canonical spelling.
 #[derive(Debug, Deserialize)]
 pub struct TokenResponse {
     /// The OAuth access token.
     pub access_token: String,
-    /// Token type (usually "bearer"). Not always returned by the API.
+    /// Raw wire `token_type`. The API returns it lowercase ("bearer") and
+    /// does not always return it at all; use `normalized_token_type` for the
+    /// canonical spelling.
     #[serde(default)]
     pub token_type: Option<String>,
     /// Token lifetime in seconds.
@@ -33,7 +40,9 @@ pub struct TokenResponse {
 pub struct LongLivedTokenResponse {
     /// The long-lived access token.
     pub access_token: String,
-    /// Token type (usually "bearer"). Not always returned by the API.
+    /// Raw wire `token_type`. The API returns it lowercase ("bearer") and
+    /// does not always return it at all; use `normalized_token_type` for the
+    /// canonical spelling.
     #[serde(default)]
     pub token_type: Option<String>,
     /// Token lifetime in seconds (typically 5184000 for 60 days).
@@ -76,8 +85,43 @@ pub struct DebugTokenData {
 pub struct AppAccessTokenResponse {
     /// The app access token.
     pub access_token: String,
-    /// Token type (usually "bearer").
+    /// Raw wire `token_type`; use
+    /// [`normalized_token_type`](AppAccessTokenResponse::normalized_token_type)
+    /// for the canonical spelling.
     pub token_type: String,
+}
+
+impl TokenResponse {
+    /// Canonical token type for this response.
+    pub fn normalized_token_type(&self) -> String {
+        normalize_token_type(self.token_type.as_deref())
+    }
+}
+
+impl LongLivedTokenResponse {
+    /// Canonical token type for this response.
+    pub fn normalized_token_type(&self) -> String {
+        normalize_token_type(self.token_type.as_deref())
+    }
+}
+
+impl AppAccessTokenResponse {
+    /// Canonical token type for this response.
+    pub fn normalized_token_type(&self) -> String {
+        normalize_token_type(Some(&self.token_type))
+    }
+}
+
+/// Canonicalize a `token_type` value.
+///
+/// The API returns it lowercase and older responses omit it entirely; both
+/// become [`TOKEN_TYPE_BEARER`]. Any other value is returned unchanged.
+pub(crate) fn normalize_token_type(token_type: Option<&str>) -> String {
+    match token_type {
+        None | Some("") => TOKEN_TYPE_BEARER.to_owned(),
+        Some(t) if t.eq_ignore_ascii_case(TOKEN_TYPE_BEARER) => TOKEN_TYPE_BEARER.to_owned(),
+        Some(t) => t.to_owned(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -231,11 +275,10 @@ impl Client {
             .map(|id| id.to_string())
             .unwrap_or_default();
 
+        let token_type = token_resp.normalized_token_type();
         let token_info = TokenInfo {
             access_token: token_resp.access_token,
-            token_type: token_resp
-                .token_type
-                .unwrap_or_else(|| "bearer".to_string()),
+            token_type,
             expires_at: Utc::now() + chrono::Duration::seconds(expires_in),
             user_id,
             created_at: Utc::now(),
@@ -276,9 +319,10 @@ impl Client {
 
         let user_id = self.user_id().await;
 
+        let token_type = long_resp.normalized_token_type();
         let token_info = TokenInfo {
             access_token: long_resp.access_token,
-            token_type: long_resp.token_type.unwrap_or_else(|| "bearer".to_string()),
+            token_type,
             expires_at: Utc::now() + chrono::Duration::seconds(long_resp.expires_in),
             user_id,
             created_at: Utc::now(),
@@ -313,9 +357,10 @@ impl Client {
 
         let user_id = self.user_id().await;
 
+        let token_type = long_resp.normalized_token_type();
         let token_info = TokenInfo {
             access_token: long_resp.access_token,
-            token_type: long_resp.token_type.unwrap_or_else(|| "bearer".to_string()),
+            token_type,
             expires_at: Utc::now() + chrono::Duration::seconds(long_resp.expires_in),
             user_id,
             created_at: Utc::now(),
@@ -480,7 +525,7 @@ impl Client {
 
         let token_info = TokenInfo {
             access_token: access_token.to_owned(),
-            token_type: "bearer".into(),
+            token_type: TOKEN_TYPE_BEARER.to_owned(),
             expires_at,
             user_id: data.user_id.clone(),
             created_at,
@@ -608,6 +653,41 @@ mod tests {
 
         // Config default includes threads_basic
         assert!(url.contains("threads_basic"));
+    }
+
+    #[test]
+    fn test_normalize_token_type() {
+        for input in [
+            None,
+            Some(""),
+            Some("bearer"),
+            Some("Bearer"),
+            Some("BEARER"),
+        ] {
+            assert_eq!(
+                normalize_token_type(input),
+                TOKEN_TYPE_BEARER,
+                "input: {input:?}"
+            );
+        }
+        // Any other scheme is passed through untouched.
+        assert_eq!(normalize_token_type(Some("mac")), "mac");
+    }
+
+    #[test]
+    fn test_responses_normalized_token_type() {
+        let token_resp: TokenResponse =
+            serde_json::from_str(r#"{"access_token":"tok","token_type":"bearer"}"#).unwrap();
+        assert_eq!(token_resp.normalized_token_type(), TOKEN_TYPE_BEARER);
+
+        // token_type omitted entirely (older responses)
+        let long_resp: LongLivedTokenResponse =
+            serde_json::from_str(r#"{"access_token":"tok","expires_in":5184000}"#).unwrap();
+        assert_eq!(long_resp.normalized_token_type(), TOKEN_TYPE_BEARER);
+
+        let app_resp: AppAccessTokenResponse =
+            serde_json::from_str(r#"{"access_token":"tok","token_type":"BEARER"}"#).unwrap();
+        assert_eq!(app_resp.normalized_token_type(), TOKEN_TYPE_BEARER);
     }
 
     #[test]

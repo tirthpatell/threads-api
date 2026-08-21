@@ -61,6 +61,11 @@ pub const MAX_ALT_TEXT_LENGTH: usize = 1000;
 /// Minimum timestamp for search queries (July 5, 2023).
 pub const MIN_SEARCH_TIMESTAMP: i64 = 1_688_540_400;
 
+// --- Token types ---
+
+/// Canonical `token_type` value; the API returns it lowercase or omits it.
+pub const TOKEN_TYPE_BEARER: &str = "Bearer";
+
 // --- Library version ---
 
 /// Library version string from Cargo.toml.
